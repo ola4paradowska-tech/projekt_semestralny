@@ -190,11 +190,19 @@ class FilterWidget(QWidget):
         if not item:
             return False
 
-        digits = "".join(ch for ch in item.text() if ch.isdigit() or ch == ".")
-        if not digits:
-            return False
+        text = item.text()
 
-        value = float(digits)
+        # obsługa ciśnienia typu 120/80 – bierzemy skurczowe
+        if "/" in text:
+            try:
+                value = float(text.split("/")[0])
+            except ValueError:
+                return False
+        else:
+            digits = "".join(ch for ch in text if ch.isdigit() or ch == ".")
+            if not digits:
+                return False
+            value = float(digits)
 
         return {
             ">": value > number,
