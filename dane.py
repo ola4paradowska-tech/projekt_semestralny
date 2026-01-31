@@ -1,18 +1,17 @@
-import sys
-import csv
+import sys, csv
 from PyQt6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QMessageBox,
-    QComboBox,
-    QHBoxLayout,
-    QLineEdit
+    QApplication, QWidget, QPushButton, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QMessageBox, QComboBox, QHBoxLayout, QLineEdit
 )
-from PyQt6.QtCore import Qt
+
+NUMERIC_COLS = {"age", "id_pacjenta", "heartrate"}
+OPS = {
+    ">":  lambda a, b: a > b,
+    "<":  lambda a, b: a < b,
+    ">=": lambda a, b: a >= b,
+    "<=": lambda a, b: a <= b,
+    "=":  lambda a, b: a == b,
+}
 
 class NumericItem(QTableWidgetItem):
     def __lt__(self, other):
@@ -29,6 +28,7 @@ class CsvTableViewer(QWidget):
 
         self.button = QPushButton("Wczytaj dane")
         self.button.clicked.connect(self.load_csv)
+
         self.stats_button = QPushButton("Statystyka")
         self.stats_button.clicked.connect(self.open_statistics)
 
@@ -36,7 +36,6 @@ class CsvTableViewer(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
 
-        # --- FILTRY ---
         self.filter_column = QComboBox()
         self.filter_value = QLineEdit()
         self.filter_value.setPlaceholderText("Wpisz wartość (np. Female)")
@@ -50,80 +49,64 @@ class CsvTableViewer(QWidget):
         self.back_button = QPushButton("Powrót do menu")
         self.back_button.clicked.connect(self.back_to_menu)
 
-        # --- layout filtrów ---
         filter_layout = QHBoxLayout()
-        filter_layout.addWidget(self.filter_column)
-        filter_layout.addWidget(self.filter_value)
-        filter_layout.addWidget(self.filter_button)
-        filter_layout.addWidget(self.clear_filter_button)
-        filter_layout.addWidget(self.back_button)
-
-        self.table.setAlternatingRowColors(True)
-
-        # --- menu startowe ---
-        self.filter_column.hide()
-        self.filter_value.hide()
-        self.filter_button.hide()
-        self.clear_filter_button.hide()
-        self.table.hide()
-        self.back_button.hide()
+        for w in (
+            self.filter_column, self.filter_value,
+            self.filter_button, self.clear_filter_button, self.back_button
+        ):
+            filter_layout.addWidget(w)
 
         top_buttons = QHBoxLayout()
         top_buttons.addWidget(self.button)
         top_buttons.addWidget(self.stats_button)
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         layout.addLayout(top_buttons)
         layout.addLayout(filter_layout)
         layout.addWidget(self.table)
 
-        self.setLayout(layout)
+        self.set_ui_visible(False)
+
+    def set_ui_visible(self, visible: bool):
+        for w in (
+            self.filter_column, self.filter_value,
+            self.filter_button, self.clear_filter_button,
+            self.table, self.back_button
+        ):
+            w.setVisible(visible)
 
     def parse_numeric_filter(self, text):
         text = text.replace(" ", "")
-
-        for op in (">=", "<=", ">", "<", "="):
+        for op in OPS:
             if text.startswith(op):
                 try:
                     return op, float(text[len(op):])
                 except ValueError:
-                    return None, None
-
+                    pass
         return None, None
 
     def load_csv(self):
         try:
-            with open("patients_data_pl.csv", newline="", encoding="utf-8") as file:
-                reader = csv.reader(file)
-                data = list(reader)
+            with open("patients_data_pl.csv", encoding="utf-8") as f:
+                data = list(csv.reader(f))
 
-            headers = data[0]
-            rows = data[1:]
+            headers, rows = data[0], data[1:]
 
             self.table.setSortingEnabled(False)
             self.table.setColumnCount(len(headers))
             self.table.setRowCount(len(rows))
             self.table.setHorizontalHeaderLabels(headers)
+
             self.filter_column.clear()
             self.filter_column.addItems(headers)
 
-            for row_idx, row in enumerate(rows):
-                for col_idx, value in enumerate(row):
-                    if headers[col_idx].lower() in ("age", "id_pacjenta", "heartrate"):
-                        item = NumericItem(value)
-                    else:
-                        item = QTableWidgetItem(value)
-
-                    self.table.setItem(row_idx, col_idx, item)
-
-            self.filter_column.show()
-            self.filter_value.show()
-            self.filter_button.show()
-            self.clear_filter_button.show()
+            for r, row in enumerate(rows):
+                for c, value in enumerate(row):
+                    item = NumericItem(value) if headers[c].lower() in NUMERIC_COLS else QTableWidgetItem(value)
+                    self.table.setItem(r, c, item)
 
             self.table.resizeColumnsToContents()
-            self.table.show()
-            self.back_button.show()
+            self.set_ui_visible(True)
 
             self.button.setText("Dane wczytane")
             self.button.setEnabled(False)
@@ -133,75 +116,47 @@ class CsvTableViewer(QWidget):
             QMessageBox.critical(self, "Błąd", str(e))
 
     def apply_filter(self):
-        col_index = self.filter_column.currentIndex()
-        raw_value = self.filter_value.text().strip().lower()
-
-        if not raw_value:
+        col = self.filter_column.currentIndex()
+        raw = self.filter_value.text().strip().lower()
+        if not raw:
             return
 
-        op, number = self.parse_numeric_filter(raw_value)
+        op, num = self.parse_numeric_filter(raw)
 
         for row in range(self.table.rowCount()):
-            item = self.table.item(row, col_index)
+            item = self.table.item(row, col)
             if not item:
                 self.table.setRowHidden(row, True)
                 continue
 
             text = item.text().lower()
+            show = False
 
-            # --- FILTR LICZBOWY ---
-            if op is not None:
+            if op:
                 try:
-                    value = float(text)
-                    if op == ">" and value > number:
-                        show = True
-                    elif op == "<" and value < number:
-                        show = True
-                    elif op == ">=" and value >= number:
-                        show = True
-                    elif op == "<=" and value <= number:
-                        show = True
-                    elif op == "=" and value == number:
-                        show = True
-                    else:
-                        show = False
+                    show = OPS[op](float(text), num)
                 except ValueError:
-                    show = False
-
-            # --- FILTR TEKSTOWY ---
+                    pass
             else:
-                show = raw_value in text
+                show = raw in text
 
             self.table.setRowHidden(row, not show)
 
     def clear_filter(self):
         self.filter_value.clear()
-        for row in range(self.table.rowCount()):
-            self.table.setRowHidden(row, False)
+        for r in range(self.table.rowCount()):
+            self.table.setRowHidden(r, False)
 
     def back_to_menu(self):
-        self.table.hide()
-        self.filter_column.hide()
-        self.filter_value.hide()
-        self.filter_button.hide()
-        self.clear_filter_button.hide()
-        self.back_button.hide()
-
+        self.set_ui_visible(False)
         self.table.clear()
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
-
         self.button.setText("Wczytaj dane")
         self.button.setEnabled(True)
 
     def open_statistics(self):
-        QMessageBox.information(
-            self,
-            "Statystyka",
-            "Tu w przyszłości pojawią się statystyki.\n\n"
-            "Na razie to tylko placeholder."
-        )
-
+        QMessageBox.information(self, "Statystyka", "Placeholder statystyk.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
