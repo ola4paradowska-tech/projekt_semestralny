@@ -1,5 +1,3 @@
-import pandas as pd
-
 import sys
 import csv
 from PyQt6.QtWidgets import (
