@@ -28,14 +28,24 @@ class CsvTableViewer(QWidget):
 
         self.sort_button = QPushButton("Sortuj")
         self.sort_button.clicked.connect(self.sort_table)
+        self.back_button = QPushButton("Powrót do menu")
+        self.back_button.clicked.connect(self.back_to_menu)
+        self.back_button.hide()
 
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(self.column_select)
         sort_layout.addWidget(self.order_select)
         sort_layout.addWidget(self.sort_button)
+        sort_layout.addWidget(self.back_button)
 
         self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
+
+        # --- ukryj na start (menu) ---
+        self.column_select.hide()
+        self.order_select.hide()
+        self.sort_button.hide()
+        self.table.hide()
 
         layout = QVBoxLayout()
         layout.addWidget(self.button)
@@ -67,6 +77,14 @@ class CsvTableViewer(QWidget):
                     )
 
             self.table.resizeColumnsToContents()
+            self.column_select.show()
+            self.order_select.show()
+            self.sort_button.show()
+            self.table.show()
+            self.back_button.show()
+
+            self.button.setText("Dane wczytane")
+            self.button.setEnabled(False)
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
@@ -82,6 +100,20 @@ class CsvTableViewer(QWidget):
         )
 
         self.table.sortItems(col_index, order)
+
+    def back_to_menu(self):
+        self.column_select.hide()
+        self.order_select.hide()
+        self.sort_button.hide()
+        self.table.hide()
+        self.back_button.hide()
+
+        self.table.clear()
+        self.table.setRowCount(0)
+        self.table.setColumnCount(0)
+
+        self.button.setText("Wczytaj dane")
+        self.button.setEnabled(True)
 
 
 if __name__ == "__main__":
