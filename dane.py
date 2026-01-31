@@ -102,11 +102,13 @@ class CsvTableViewer(QWidget):
 
             for row_idx, row in enumerate(rows):
                 for col_idx, value in enumerate(row):
-                    self.table.setItem(
-                        row_idx,
-                        col_idx,
-                        NumericItem(value)
-                    )
+                    if headers[col_idx].lower() in ("age", "id_pacjenta", "heartrate"):
+                        item = NumericItem(value)
+                    else:
+                        item = QTableWidgetItem(value)
+
+                    self.table.setItem(row_idx, col_idx, item)
+
             self.filter_column.show()
             self.filter_value.show()
             self.filter_button.show()
@@ -172,6 +174,10 @@ class CsvTableViewer(QWidget):
 
     def back_to_menu(self):
         self.table.hide()
+        self.filter_column.hide()
+        self.filter_value.hide()
+        self.filter_button.hide()
+        self.clear_filter_button.hide()
         self.back_button.hide()
 
         self.table.clear()
