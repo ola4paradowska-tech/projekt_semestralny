@@ -49,5 +49,3 @@ if __name__ == "__main__":
     window = CsvViewer()
     window.show()
     sys.exit(app.exec())
-
-    xxx
