@@ -1,0 +1,51 @@
+PatientID,Age,Gender,BloodPressure,HeartRate,Symptoms
+P001,53,Female,133/79,72,shortness of breath
+P002,76,Female,136/71,83,dizziness; chest pain; headache
+P003,67,Female,132/77,70,nausea; shortness of breath; dizziness
+P004,28,Female,104/70,72,nausea; fatigue
+P005,77,Female,140/85,74,headache; fatigue
+P006,25,Male,118/75,81,
+P007,57,Male,141/71,82,palpitations
+P008,51,Female,127/73,72,chest pain; fatigue
+P009,54,Female,127/81,71,
+P010,47,Male,134/72,74,headache; palpitations
+P011,56,Male,126/79,79,dizziness; shortness of breath
+P012,59,Male,131/85,61,palpitations; dizziness
+P013,75,Female,136/79,81,dizziness
+P014,64,Female,133/76,89,fatigue
+P015,28,Female,105/61,68,
+P016,21,Male,115/66,67,fatigue; nausea; shortness of breath
+P017,66,Female,124/82,63,
+P018,84,Female,153/78,78,fatigue
+P019,56,Female,126/82,73,
+P020,83,Female,142/78,79,nausea
+P021,22,Female,106/72,70,fatigue; palpitations
+P022,19,Female,100/71,85,fatigue
+P023,63,Female,141/72,62,nausea; palpitations
+P024,81,Female,145/85,59,dizziness; chest pain
+P025,23,Male,108/67,75,fatigue
+P026,43,Female,111/68,88,dizziness; chest pain; nausea
+P027,48,Female,120/67,82,shortness of breath; dizziness; headache
+P028,35,Female,119/72,87,nausea; dizziness
+P029,84,Female,138/84,77,palpitations
+P030,36,Male,113/76,84,fatigue; palpitations; chest pain
+P031,27,Male,115/66,80,palpitations
+P032,71,Female,140/73,63,nausea
+P033,55,Male,132/75,65,palpitations; fatigue; dizziness
+P034,52,Male,134/70,85,
+P035,40,Male,131/74,68,
+P036,79,Female,151/80,69,dizziness; chest pain
+P037,36,Female,118/72,84,
+P038,45,Male,119/79,86,shortness of breath; headache
+P039,70,Male,134/81,58,
+P040,38,Female,124/72,69,
+P041,25,Female,115/66,91,palpitations
+P042,43,Male,117/71,84,chest pain; nausea
+P043,62,Male,143/86,76,palpitations; dizziness; fatigue
+P044,20,Male,103/68,74,palpitations; shortness of breath
+P045,60,Male,130/77,86,palpitations; chest pain
+P046,56,Male,129/76,76,fatigue; headache
+P047,68,Female,128/80,69,headache; dizziness; nausea
+P048,49,Female,124/75,87,fatigue; chest pain; shortness of breath
+P049,23,Female,100/67,72,dizziness
+P050,70,Female,134/83,67,shortness of breath; headache; fatigue
