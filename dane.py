@@ -56,7 +56,6 @@ class CsvTableViewer(QWidget):
         filter_layout.addWidget(self.clear_filter_button)
         filter_layout.addWidget(self.back_button)
 
-        self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
 
         # --- menu startowe ---
@@ -72,6 +71,18 @@ class CsvTableViewer(QWidget):
         layout.addLayout(filter_layout)
         layout.addWidget(self.table)
         self.setLayout(layout)
+
+    def parse_numeric_filter(self, text):
+        text = text.replace(" ", "")
+
+        for op in (">=", "<=", ">", "<", "="):
+            if text.startswith(op):
+                try:
+                    return op, float(text[len(op):])
+                except ValueError:
+                    return None, None
+
+        return None, None
 
     def load_csv(self):
         try:
@@ -114,39 +125,52 @@ class CsvTableViewer(QWidget):
 
     def apply_filter(self):
         col_index = self.filter_column.currentIndex()
-        value = self.filter_value.text().strip().lower()
+        raw_value = self.filter_value.text().strip().lower()
 
-        if not value:
+        if not raw_value:
             return
+
+        op, number = self.parse_numeric_filter(raw_value)
 
         for row in range(self.table.rowCount()):
             item = self.table.item(row, col_index)
-            if item and value in item.text().lower():
-                self.table.setRowHidden(row, False)
-            else:
+            if not item:
                 self.table.setRowHidden(row, True)
+                continue
+
+            text = item.text().lower()
+
+            # --- FILTR LICZBOWY ---
+            if op is not None:
+                try:
+                    value = float(text)
+                    if op == ">" and value > number:
+                        show = True
+                    elif op == "<" and value < number:
+                        show = True
+                    elif op == ">=" and value >= number:
+                        show = True
+                    elif op == "<=" and value <= number:
+                        show = True
+                    elif op == "=" and value == number:
+                        show = True
+                    else:
+                        show = False
+                except ValueError:
+                    show = False
+
+            # --- FILTR TEKSTOWY ---
+            else:
+                show = raw_value in text
+
+            self.table.setRowHidden(row, not show)
 
     def clear_filter(self):
         self.filter_value.clear()
         for row in range(self.table.rowCount()):
             self.table.setRowHidden(row, False)
 
-    def sort_table(self):
-        col_index = self.column_select.currentIndex()
-        order_text = self.order_select.currentText()
-
-        order = (
-            Qt.SortOrder.AscendingOrder
-            if order_text == "Rosnąco"
-            else Qt.SortOrder.DescendingOrder
-        )
-
-        self.table.sortItems(col_index, order)
-
     def back_to_menu(self):
-        self.column_select.hide()
-        self.order_select.hide()
-        self.sort_button.hide()
         self.table.hide()
         self.back_button.hide()
 
