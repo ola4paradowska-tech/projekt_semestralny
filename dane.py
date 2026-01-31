@@ -29,6 +29,8 @@ class CsvTableViewer(QWidget):
 
         self.button = QPushButton("Wczytaj dane")
         self.button.clicked.connect(self.load_csv)
+        self.stats_button = QPushButton("Statystyka")
+        self.stats_button.clicked.connect(self.open_statistics)
 
         self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
@@ -66,10 +68,15 @@ class CsvTableViewer(QWidget):
         self.table.hide()
         self.back_button.hide()
 
+        top_buttons = QHBoxLayout()
+        top_buttons.addWidget(self.button)
+        top_buttons.addWidget(self.stats_button)
+
         layout = QVBoxLayout()
-        layout.addWidget(self.button)
+        layout.addLayout(top_buttons)
         layout.addLayout(filter_layout)
         layout.addWidget(self.table)
+
         self.setLayout(layout)
 
     def parse_numeric_filter(self, text):
@@ -186,6 +193,14 @@ class CsvTableViewer(QWidget):
 
         self.button.setText("Wczytaj dane")
         self.button.setEnabled(True)
+
+    def open_statistics(self):
+        QMessageBox.information(
+            self,
+            "Statystyka",
+            "Tu w przyszłości pojawią się statystyki.\n\n"
+            "Na razie to tylko placeholder."
+        )
 
 
 if __name__ == "__main__":
