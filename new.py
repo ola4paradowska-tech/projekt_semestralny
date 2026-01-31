@@ -1,43 +1,60 @@
-import sys, csv
-
+import sys
+import csv
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QMessageBox, QComboBox, QHBoxLayout, QLineEdit,
-    QStackedWidget, QLabel
+    QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit,
+    QMessageBox, QStackedWidget
 )
+from PyQt6.QtCore import Qt
 
-NUMERIC_COLS = {"age", "id_pacjenta", "heartrate"}
-OPS = {
-    ">":  lambda a, b: a > b,
-    "<":  lambda a, b: a < b,
-    ">=": lambda a, b: a >= b,
-    "<=": lambda a, b: a <= b,
-    "=":  lambda a, b: a == b,
-}
+class NumericItem(QTableWidgetItem):
+    def __lt__(self, other):
+        try:
+            return float(self.text()) < float(other.text())
+        except ValueError:
+            return self.text() < other.text()
+# ===================== FILTER VIEW =====================
 
 class FilterWidget(QWidget):
-    def __init__(self, headers, data):
+    def __init__(self, headers, data, go_back):
         super().__init__()
         self.headers = headers
         self.data = data
-
-        self.table = QTableWidget()
-        self.filter_column = QComboBox()
-        self.filter_column.addItems(headers)
-
-        self.filter_value = QLineEdit()
-        self.filter_value.setPlaceholderText("np. Female lub >30")
-
-        self.filter_button = QPushButton("Filtruj")
-        self.filter_button.clicked.connect(self.apply_filter)
+        self.go_back = go_back
 
         layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(10)
+
+        back_btn = QPushButton("← Wróć")
+        back_btn.setFixedWidth(120)
+        back_btn.clicked.connect(self.go_back)
+
+        title = QLabel("Filtrowanie danych")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.filter_column = QComboBox()
+        self.filter_column.addItems(headers)
+        self.filter_column.setFixedWidth(200)
+
+        self.filter_value = QLineEdit()
+        self.filter_value.setPlaceholderText("np. Female lub 30")
+        self.filter_value.setFixedWidth(200)
+
+        filter_btn = QPushButton("Filtruj")
+        filter_btn.setFixedWidth(200)
+        filter_btn.clicked.connect(self.apply_filter)
+
+        self.table = QTableWidget()
+        self.table.setSortingEnabled(True)
+        self.load_data()
+
+        layout.addWidget(back_btn)
+        layout.addWidget(title)
         layout.addWidget(self.filter_column)
         layout.addWidget(self.filter_value)
-        layout.addWidget(self.filter_button)
+        layout.addWidget(filter_btn)
         layout.addWidget(self.table)
-
-        self.load_data()
 
     def load_data(self):
         self.table.setColumnCount(len(self.headers))
@@ -48,13 +65,82 @@ class FilterWidget(QWidget):
             for c, value in enumerate(row):
                 self.table.setItem(r, c, QTableWidgetItem(value))
 
+        self.table.resizeColumnsToContents()
+
+    def parse_numeric_filter(self, text):
+        text = text.replace(" ", "")
+        for op in (">=", "<=", ">", "<", "="):
+            if text.startswith(op):
+                try:
+                    return op, float(text[len(op):])
+                except ValueError:
+                    return None, None
+        return None, None
+
     def apply_filter(self):
         col = self.filter_column.currentIndex()
-        value = self.filter_value.text().lower()
+        raw = self.filter_value.text().strip().lower()
 
-        for row in range(self.table.rowCount()):
-            text = self.table.item(row, col).text().lower()
-            self.table.setRowHidden(row, value not in text)
+        if not raw:
+            return
+
+        op, number = self.parse_numeric_filter(raw)
+
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, col)
+            if not item:
+                self.table.setRowHidden(r, True)
+                continue
+
+            text = item.text().lower()
+            show = False
+
+            # --- FILTR LICZBOWY ---
+            if op is not None:
+                try:
+                    value = float(text)
+                    if op == ">" and value > number:
+                        show = True
+                    elif op == "<" and value < number:
+                        show = True
+                    elif op == ">=" and value >= number:
+                        show = True
+                    elif op == "<=" and value <= number:
+                        show = True
+                    elif op == "=" and value == number:
+                        show = True
+                except ValueError:
+                    show = False
+
+            # --- FILTR TEKSTOWY ---
+            else:
+                show = raw in text
+
+            self.table.setRowHidden(r, not show)
+
+
+# ===================== MENU VIEW =====================
+
+class MenuWidget(QWidget):
+    def __init__(self, callbacks):
+        super().__init__()
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(12)
+
+        title = QLabel("Funkcje")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        for text, callback in callbacks.items():
+            btn = QPushButton(text)
+            btn.setFixedWidth(240)
+            btn.clicked.connect(callback)
+            layout.addWidget(btn)
+
+
+# ===================== MAIN WINDOW =====================
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -62,60 +148,88 @@ class MainWindow(QWidget):
         self.setWindowTitle("Analiza danych pacjentów")
         self.resize(1000, 600)
 
-        self.data = None
         self.headers = None
-
-        self.load_button = QPushButton("Wczytaj dane CSV")
-        self.load_button.clicked.connect(self.load_csv)
-
-        self.menu_layout = QVBoxLayout()
-        self.menu_layout.addWidget(self.load_button)
+        self.data = None
 
         self.stack = QStackedWidget()
 
-        layout = QHBoxLayout(self)
-        layout.addLayout(self.menu_layout)
-        layout.addWidget(self.stack)
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.stack)
+
+        self.stack.addWidget(self.build_load_screen())
+
+    # ---------- START SCREEN ----------
+
+    def build_load_screen(self):
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        btn = QPushButton("Wczytaj dane CSV")
+        btn.setFixedWidth(240)
+        btn.clicked.connect(self.load_csv)
+
+        layout.addWidget(btn)
+        return w
+
+    # ---------- DATA LOADING ----------
 
     def load_csv(self):
-        with open("patients_data_pl.csv", encoding="utf-8") as f:
-            rows = list(csv.reader(f))
+        try:
+            with open("patients_data_pl.csv", encoding="utf-8") as f:
+                rows = list(csv.reader(f))
 
-        self.headers = rows[0]
-        self.data = rows[1:]
+            self.headers = rows[0]
+            self.data = rows[1:]
+            self.show_menu()
 
-        self.build_menu()
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", str(e))
 
-    def build_menu(self):
-        self.menu_layout.addWidget(QLabel("Funkcje:"))
+    # ---------- MENU ----------
 
-        self.add_menu_button("Podgląd danych", self.open_preview)
-        self.add_menu_button("Filtrowanie danych", self.open_filter)
-        self.add_menu_button("Analiza statystyczna", self.open_stats)
-        self.add_menu_button("Porównanie grup", self.open_compare)
-        self.add_menu_button("Eksport wyników", self.open_export)
+    def show_menu(self):
+        menu = MenuWidget({
+            "Podgląd danych": self.open_preview,
+            "Filtrowanie danych": self.open_filter,
+            "Analiza statystyczna": self.open_stats,
+            "Porównanie grup": self.open_compare,
+            "Eksport wyników": self.open_export,
+        })
 
-    def add_menu_button(self, text, handler):
-        btn = QPushButton(text)
-        btn.clicked.connect(handler)
-        self.menu_layout.addWidget(btn)
+        self.stack.addWidget(menu)
+        self.stack.setCurrentWidget(menu)
 
-    def open_filter(self):
-        widget = FilterWidget(self.headers, self.data)
+    # ---------- NAVIGATION ----------
+
+    def push(self, widget):
         self.stack.addWidget(widget)
         self.stack.setCurrentWidget(widget)
 
+    def pop(self):
+        current = self.stack.currentWidget()
+        self.stack.removeWidget(current)
+        current.deleteLater()
+
+    # ---------- FEATURES ----------
+
+    def open_filter(self):
+        self.push(FilterWidget(self.headers, self.data, self.pop))
+
     def open_preview(self):
-        QMessageBox.information(self, "Info", "Podgląd – do zrobienia")
+        QMessageBox.information(self, "Podgląd", "Tu będzie podgląd danych.")
 
     def open_stats(self):
-        QMessageBox.information(self, "Info", "Statystyka – do zrobienia")
+        QMessageBox.information(self, "Statystyka", "Tu będzie analiza statystyczna.")
 
     def open_compare(self):
-        QMessageBox.information(self, "Info", "Porównanie – do zrobienia")
+        QMessageBox.information(self, "Porównanie", "Tu będzie porównanie grup.")
 
     def open_export(self):
-        QMessageBox.information(self, "Info", "Eksport – do zrobienia")
+        QMessageBox.information(self, "Eksport", "Tu będzie eksport wyników.")
+
+
+# ===================== APP START =====================
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
