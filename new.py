@@ -1,9 +1,10 @@
+import pandas as pd
 import sys
 import csv
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit,
-    QMessageBox, QStackedWidget
+    QMessageBox, QStackedWidget, QCheckBox
 )
 from PyQt6.QtCore import Qt
 
@@ -63,6 +64,40 @@ class PreviewWidget(QWidget):
 
         self.table.resizeColumnsToContents()
 
+class StatsTableWidget(QWidget):
+    def __init__(self, tables: dict, go_back):
+        super().__init__()
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        back_btn = QPushButton("← Wróć")
+        back_btn.setFixedWidth(120)
+        back_btn.clicked.connect(go_back)
+        layout.addWidget(back_btn)
+
+        for title, df in tables.items():
+            label = QLabel(title)
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(label)
+
+            table = QTableWidget()
+            table.setRowCount(df.shape[0])
+            table.setColumnCount(df.shape[1])
+            table.setHorizontalHeaderLabels([str(c) for c in df.columns])
+            table.setVerticalHeaderLabels([str(i) for i in df.index])
+            table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            table.setSortingEnabled(False)
+
+            for r in range(df.shape[0]):
+                for c in range(df.shape[1]):
+                    table.setItem(
+                        r, c,
+                        QTableWidgetItem(str(df.iat[r, c]))
+                    )
+
+            table.resizeColumnsToContents()
+            layout.addWidget(table)
 
 # ===================== FILTER VIEW =====================
 
@@ -259,7 +294,111 @@ class FilterWidget(QWidget):
         for r in range(self.table.rowCount()):
             self.table.setRowHidden(r, False)
 
+# ============ ANALIZA =====================
 
+def analyze_data(headers, data, variables, metric):
+
+    clean_headers = [h.replace("\ufeff", "").strip() for h in headers]
+    df = pd.DataFrame(data, columns=clean_headers)
+
+    # mapowanie
+    mapping = {}
+    for col in df.columns:
+        c = col.lower()
+        if "płeć" in c or "plec" in c:
+            mapping[col] = "płeć"
+        elif "wiek" in c:
+            mapping[col] = "wiek"
+        elif "tętno" in c or "tetno" in c:
+            mapping[col] = "tętno"
+        elif "ciśn" in c:
+            mapping[col] = "ciśnienie"
+
+    df = df.rename(columns=mapping)
+
+    if "płeć" not in df.columns:
+        return "Brak kolumny płeć."
+
+    # konwersje
+    for v in variables:
+        if v == "ciśnienie":
+            df[v] = df[v].str.split("/").str[0]
+        df[v] = pd.to_numeric(df[v], errors="coerce")
+
+    df = df.dropna(subset=variables + ["płeć"])
+
+    # grupy
+    groups = {
+        "kobieta": df[df["płeć"].str.lower().str.startswith("k")],
+        "mężczyzna": df[df["płeć"].str.lower().str.startswith("m")],
+        "wszyscy": df,
+    }
+
+    result = {}
+
+    for name, g in groups.items():
+        rows = {}
+        for v in variables:
+            if metric in ("średnia", "średnia i mediana"):
+                rows[f"{v} (średnia)"] = round(g[v].mean(), 2)
+            if metric in ("mediana", "średnia i mediana"):
+                rows[f"{v} (mediana)"] = round(g[v].median(), 2)
+        result[name] = rows
+
+    return {
+        "Wyniki": pd.DataFrame(result).T
+    }
+
+
+
+class StatsConfigWidget(QWidget):
+    def __init__(self, headers, data, go_back, run_analysis):
+        super().__init__()
+
+        self.headers = headers
+        self.data = data
+        self.run_analysis = run_analysis
+
+        layout = QVBoxLayout(self)
+
+        back_btn = QPushButton("← Wróć")
+        back_btn.clicked.connect(go_back)
+        layout.addWidget(back_btn)
+
+        layout.addWidget(QLabel("Wybierz dane do analizy:"))
+
+        self.check_age = QCheckBox("Wiek")
+        self.check_bp = QCheckBox("Ciśnienie (skurczowe)")
+        self.check_hr = QCheckBox("Tętno")
+
+        layout.addWidget(self.check_age)
+        layout.addWidget(self.check_bp)
+        layout.addWidget(self.check_hr)
+
+        layout.addWidget(QLabel("Miara statystyczna:"))
+
+        self.metric = QComboBox()
+        self.metric.addItems(["średnia", "mediana", "średnia i mediana"])
+        layout.addWidget(self.metric)
+
+        btn = QPushButton("Uruchom analizę")
+        btn.clicked.connect(self.run)
+        layout.addWidget(btn)
+
+    def run(self):
+        selected = []
+        if self.check_age.isChecked():
+            selected.append("wiek")
+        if self.check_bp.isChecked():
+            selected.append("ciśnienie")
+        if self.check_hr.isChecked():
+            selected.append("tętno")
+
+        if not selected:
+            QMessageBox.warning(self, "Błąd", "Wybierz co najmniej jedną zmienną.")
+            return
+
+        self.run_analysis(selected, self.metric.currentText())
 # ===================== MENU VIEW =====================
 
 class MenuWidget(QWidget):
@@ -313,6 +452,7 @@ class MainWindow(QWidget):
         layout.addWidget(btn)
         return w
 
+
     # ---------- DATA LOADING ----------
 
     def load_csv(self):
@@ -341,6 +481,23 @@ class MainWindow(QWidget):
         self.stack.addWidget(menu)
         self.stack.setCurrentWidget(menu)
 
+    def run_stats_analysis(self, variables, metric):
+        result = analyze_data(self.headers, self.data, variables, metric)
+
+        if isinstance(result, str):
+            QMessageBox.warning(self, "Statystyka", result)
+            return
+
+        if not isinstance(result, dict):
+            QMessageBox.warning(
+                self,
+                "Statystyka",
+                "Analiza nie zwróciła danych tabelarycznych."
+            )
+            return
+
+        self.push(StatsTableWidget(result, self.pop))
+
     # ---------- NAVIGATION ----------
 
     def push(self, widget):
@@ -361,7 +518,14 @@ class MainWindow(QWidget):
         self.push(PreviewWidget(self.headers, self.data, self.pop))
 
     def open_stats(self):
-        QMessageBox.information(self, "Statystyka", "Tu będzie analiza statystyczna.")
+        self.push(
+            StatsConfigWidget(
+                self.headers,
+                self.data,
+                self.pop,
+                self.run_stats_analysis
+            )
+        )
 
     def open_compare(self):
         QMessageBox.information(self, "Porównanie", "Tu będzie porównanie grup.")
