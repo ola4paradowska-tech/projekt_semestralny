@@ -13,6 +13,46 @@ class NumericItem(QTableWidgetItem):
             return float(self.text()) < float(other.text())
         except ValueError:
             return self.text() < other.text()
+# ===================== Dane =====================
+class PreviewWidget(QWidget):
+    def __init__(self, headers, data, go_back):
+        super().__init__()
+        self.headers = headers
+        self.data = data
+        self.go_back = go_back
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(10)
+
+        back_btn = QPushButton("← Wróć")
+        back_btn.setFixedWidth(120)
+        back_btn.clicked.connect(self.go_back)
+
+        title = QLabel("Podgląd danych")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.table = QTableWidget()
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+
+        self.load_data()
+
+        layout.addWidget(back_btn)
+        layout.addWidget(title)
+        layout.addWidget(self.table)
+
+    def load_data(self):
+        self.table.setColumnCount(len(self.headers))
+        self.table.setRowCount(len(self.data))
+        self.table.setHorizontalHeaderLabels(self.headers)
+
+        for r, row in enumerate(self.data):
+            for c, value in enumerate(row):
+                self.table.setItem(r, c, QTableWidgetItem(value))
+
+        self.table.resizeColumnsToContents()
+
 # ===================== FILTER VIEW =====================
 
 class FilterWidget(QWidget):
@@ -217,7 +257,8 @@ class MainWindow(QWidget):
         self.push(FilterWidget(self.headers, self.data, self.pop))
 
     def open_preview(self):
-        QMessageBox.information(self, "Podgląd", "Tu będzie podgląd danych.")
+        self.push(PreviewWidget(self.headers, self.data, self.pop))
+
 
     def open_stats(self):
         QMessageBox.information(self, "Statystyka", "Tu będzie analiza statystyczna.")
