@@ -55,7 +55,7 @@ class CsvTableViewer(QWidget):
 
     def load_csv(self):
         try:
-            with open("patients_data_v3.csv", newline="", encoding="utf-8") as file:
+            with open("patients_data_pl.csv", newline="", encoding="utf-8") as file:
                 reader = csv.reader(file)
                 data = list(reader)
 

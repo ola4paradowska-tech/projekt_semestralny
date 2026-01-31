@@ -1,0 +1,51 @@
+ID_pacjenta,Wiek,Płeć,Ciśnienie_krwi,Tętno,Objawy
+P001,53,Kobieta,133/79,72,duszność
+P002,76,Kobieta,136/71,83,zawroty głowy; ból w klatce piersiowej; ból głowy
+P003,67,Kobieta,132/77,70,nudności; duszność; zawroty głowy
+P004,28,Kobieta,104/70,72,nudności; zmęczenie
+P005,77,Kobieta,140/85,74,ból głowy; zmęczenie
+P006,25,Mężczyzna,118/75,81,
+P007,57,Mężczyzna,141/71,82,kołatanie serca
+P008,51,Kobieta,127/73,72,ból w klatce piersiowej; zmęczenie
+P009,54,Kobieta,127/81,71,
+P010,47,Mężczyzna,134/72,74,ból głowy; kołatanie serca
+P011,56,Mężczyzna,126/79,79,zawroty głowy; duszność
+P012,59,Mężczyzna,131/85,61,kołatanie serca; zawroty głowy
+P013,75,Kobieta,136/79,81,zawroty głowy
+P014,64,Kobieta,133/76,89,zmęczenie
+P015,28,Kobieta,105/61,68,
+P016,21,Mężczyzna,115/66,67,zmęczenie; nudności; duszność
+P017,66,Kobieta,124/82,63,
+P018,84,Kobieta,153/78,78,zmęczenie
+P019,56,Kobieta,126/82,73,
+P020,83,Kobieta,142/78,79,nudności
+P021,22,Kobieta,106/72,70,zmęczenie; kołatanie serca
+P022,19,Kobieta,100/71,85,zmęczenie
+P023,63,Kobieta,141/72,62,nudności; kołatanie serca
+P024,81,Kobieta,145/85,59,zawroty głowy; ból w klatce piersiowej
+P025,23,Mężczyzna,108/67,75,zmęczenie
+P026,43,Kobieta,111/68,88,zawroty głowy; ból w klatce piersiowej; nudności
+P027,48,Kobieta,120/67,82,duszność; zawroty głowy; ból głowy
+P028,35,Kobieta,119/72,87,nudności; zawroty głowy
+P029,84,Kobieta,138/84,77,kołatanie serca
+P030,36,Mężczyzna,113/76,84,zmęczenie; kołatanie serca; ból w klatce piersiowej
+P031,27,Mężczyzna,115/66,80,kołatanie serca
+P032,71,Kobieta,140/73,63,nudności
+P033,55,Mężczyzna,132/75,65,kołatanie serca; zmęczenie; zawroty głowy
+P034,52,Mężczyzna,134/70,85,
+P035,40,Mężczyzna,131/74,68,
+P036,79,Kobieta,151/80,69,zawroty głowy; ból w klatce piersiowej
+P037,36,Kobieta,118/72,84,
+P038,45,Mężczyzna,119/79,86,duszność; ból głowy
+P039,70,Mężczyzna,134/81,58,
+P040,38,Kobieta,124/72,69,
+P041,25,Kobieta,115/66,91,kołatanie serca
+P042,43,Mężczyzna,117/71,84,ból w klatce piersiowej; nudności
+P043,62,Mężczyzna,143/86,76,kołatanie serca; zawroty głowy; zmęczenie
+P044,20,Mężczyzna,103/68,74,kołatanie serca; duszność
+P045,60,Mężczyzna,130/77,86,kołatanie serca; ból w klatce piersiowej
+P046,56,Mężczyzna,129/76,76,zmęczenie; ból głowy
+P047,68,Kobieta,128/80,69,ból głowy; zawroty głowy; nudności
+P048,49,Kobieta,124/75,87,zmęczenie; ból w klatce piersiowej; duszność
+P049,23,Kobieta,100/67,72,zawroty głowy
+P050,70,Kobieta,134/83,67,duszność; ból głowy; zmęczenie
