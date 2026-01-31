@@ -97,7 +97,7 @@ class FilterWidget(QWidget):
 
         # --- POLA FILTRÓW ---
         self.age_input = QLineEdit()
-        self.age_input.setPlaceholderText("Wiek (np. >30)")
+        self.age_input.setPlaceholderText("Wiek (np. <30; 70)")
 
         self.gender_input = QLineEdit()
         self.gender_input.setPlaceholderText("Płeć (np. kobieta)")
@@ -106,10 +106,10 @@ class FilterWidget(QWidget):
         self.bp_input.setPlaceholderText("Ciśnienie (np. >120)")
 
         self.hr_input = QLineEdit()
-        self.hr_input.setPlaceholderText("Tętno (np. <80)")
+        self.hr_input.setPlaceholderText("Tętno (np. >80;74)")
 
         self.symptoms_input = QLineEdit()
-        self.symptoms_input.setPlaceholderText("Objawy (np. zmęczenie)")
+        self.symptoms_input.setPlaceholderText("Objawy (np. zmęczenie; nudności)")
 
         for w in (
             self.age_input,
@@ -178,13 +178,24 @@ class FilterWidget(QWidget):
         except ValueError:
             return None, None
 
-    def match_numeric(self, row, col, raw):
-        if not raw.strip():
-            return True
-
+    def match_single_numeric(self, value, raw):
         op, number = self.parse_numeric_filter(raw)
         if op is None:
             return False
+
+        ops = {
+            ">": value > number,
+            "<": value < number,
+            ">=": value >= number,
+            "<=": value <= number,
+            "=": value == number,
+        }
+
+        return ops.get(op, False)
+
+    def match_numeric(self, row, col, raw):
+        if not raw.strip():
+            return True
 
         item = self.table.item(row, col)
         if not item:
@@ -192,7 +203,7 @@ class FilterWidget(QWidget):
 
         text = item.text()
 
-        # obsługa ciśnienia typu 120/80 – bierzemy skurczowe
+        # wartość z komórki (liczba lub ciśnienie 120/80 → 120)
         if "/" in text:
             try:
                 value = float(text.split("/")[0])
@@ -204,13 +215,14 @@ class FilterWidget(QWidget):
                 return False
             value = float(digits)
 
-        return {
-            ">": value > number,
-            "<": value < number,
-            ">=": value >= number,
-            "<=": value <= number,
-            "=": value == number,
-        }[op]
+        # wiele warunków oddzielonych ;
+        parts = [p.strip() for p in raw.split(";") if p.strip()]
+
+        for part in parts:
+            if self.match_single_numeric(value, part):
+                return True
+
+        return False
 
     def apply_filter(self):
         for r in range(self.table.rowCount()):
@@ -246,6 +258,7 @@ class FilterWidget(QWidget):
 
         for r in range(self.table.rowCount()):
             self.table.setRowHidden(r, False)
+
 
 # ===================== MENU VIEW =====================
 
