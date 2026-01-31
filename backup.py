@@ -319,11 +319,19 @@ def analyze_data(headers, data, variables, metric):
     if "płeć" not in df.columns:
         return "Brak kolumny płeć."
 
-    # konwersje
+    if "ciśnienie" in variables:
+        pressure = df["ciśnienie"].astype(str).str.split("/", expand=True)
+
+        df["ciśnienie_skurczowe"] = pd.to_numeric(pressure[0], errors="coerce")
+        df["ciśnienie_rozkurczowe"] = pd.to_numeric(pressure[1], errors="coerce")
+
+        variables = [v for v in variables if v != "ciśnienie"]
+        variables.extend(["ciśnienie_skurczowe", "ciśnienie_rozkurczowe"])
+
+    # 🔑 KLUCZOWE
     for v in variables:
-        if v == "ciśnienie":
-            df[v] = df[v].str.split("/").str[0]
-        df[v] = pd.to_numeric(df[v], errors="coerce")
+        if v not in ("ciśnienie_skurczowe", "ciśnienie_rozkurczowe"):
+            df[v] = pd.to_numeric(df[v], errors="coerce")
 
     df = df.dropna(subset=variables + ["płeć"])
 
@@ -345,9 +353,22 @@ def analyze_data(headers, data, variables, metric):
                 rows[f"{v} (mediana)"] = round(g[v].median(), 2)
         result[name] = rows
 
-    return {
-        "Wyniki": pd.DataFrame(result).T
-    }
+    tables = {}
+
+    for v in variables:
+        rows = {}
+        for group, g in groups.items():
+            vals = {}
+            if metric in ("średnia", "średnia i mediana"):
+                vals["średnia"] = round(g[v].mean(), 2)
+            if metric in ("mediana", "średnia i mediana"):
+                vals["mediana"] = round(g[v].median(), 2)
+            rows[group] = vals
+
+        title = v.replace("_", " ").capitalize()
+        tables[title] = pd.DataFrame(rows).T
+
+    return tables
 
 
 
@@ -368,7 +389,7 @@ class StatsConfigWidget(QWidget):
         layout.addWidget(QLabel("Wybierz dane do analizy:"))
 
         self.check_age = QCheckBox("Wiek")
-        self.check_bp = QCheckBox("Ciśnienie (skurczowe)")
+        self.check_bp = QCheckBox("Ciśnienie")
         self.check_hr = QCheckBox("Tętno")
 
         layout.addWidget(self.check_age)
