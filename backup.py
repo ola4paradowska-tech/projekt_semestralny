@@ -353,24 +353,29 @@ def analyze_data(headers, data, variables, metric):
                 rows[f"{v} (mediana)"] = round(g[v].median(), 2)
         result[name] = rows
 
-    tables = {}
+    rows = {}
 
-    for v in variables:
-        rows = {}
-        for group, g in groups.items():
-            vals = {}
+    for group, g in groups.items():
+        row = {}
+
+        for v in variables:
+            vals = g[v].dropna()
+
+            base = v.replace("_", " ")
+
             if metric in ("średnia", "średnia i mediana"):
-                vals["średnia"] = round(g[v].mean(), 2)
+                row[f"{base} (średnia)"] = round(vals.mean(), 2) if not vals.empty else None
+
             if metric in ("mediana", "średnia i mediana"):
-                vals["mediana"] = round(g[v].median(), 2)
-            rows[group] = vals
+                row[f"{base} (mediana)"] = round(vals.median(), 2) if not vals.empty else None
 
-        title = v.replace("_", " ").capitalize()
-        tables[title] = pd.DataFrame(rows).T
+        rows[group] = row
 
-    return tables
+    df_final = pd.DataFrame(rows).T
 
-
+    return {
+        "Zestawienie zbiorcze": df_final
+    }
 
 class StatsConfigWidget(QWidget):
     def __init__(self, headers, data, go_back, run_analysis):
