@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b5eb3630-b14f-4953-a98a-4785366566df" name="Changes" comment="push">
-      <change beforePath="$PROJECT_DIR$/Nerkowe.py" beforeDir="false" afterPath="$PROJECT_DIR$/Nerkowe.py" afterDir="false" />
-    </list>
+    <list default="true" id="b5eb3630-b14f-4953-a98a-4785366566df" name="Changes" comment="push" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -316,7 +314,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772276498687</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="push">
+      <option name="closed" value="true" />
+      <created>1772276760298</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1772276760298</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
