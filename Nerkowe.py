@@ -1,26 +1,31 @@
 import sys
-import os
 import pandas as pd
-
+import locale
+locale.setlocale(locale.LC_COLLATE, "pl_PL.UTF-8")
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QStackedWidget,
-    QMessageBox, QTableView, QComboBox
+    QMessageBox, QTableView, QComboBox, QLineEdit
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
 
+# =========================
+# MODEL DANYCH
+# =========================
 
-#MODEL DANYCH - JAK SĄ POBIERANE Z TABELI
 class PandasModel(QAbstractTableModel):
     def __init__(self, df=pd.DataFrame()):
         super().__init__()
         self._df = df
+
+    def update_data(self, df):
+        self.layoutAboutToBeChanged.emit()
+        self._df = df
+        self.layoutChanged.emit()
 
     def rowCount(self, parent=None):
         return len(self._df)
@@ -28,11 +33,15 @@ class PandasModel(QAbstractTableModel):
     def columnCount(self, parent=None):
         return len(self._df.columns)
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role):
+        if not index.isValid():
+            return None
+
+        value = self._df.iloc[index.row(), index.column()]
+
         if role == Qt.ItemDataRole.DisplayRole:
-            value = self._df.iloc[index.row(), index.column()]
             if isinstance(value, float):
-                return f"{value:.1f}"
+                return f"{value:.2f}"
             return str(value)
 
     def headerData(self, section, orientation, role):
@@ -40,10 +49,38 @@ class PandasModel(QAbstractTableModel):
             if orientation == Qt.Orientation.Horizontal:
                 return str(self._df.columns[section])
             else:
-                return str(self._df.index[section])
+                return str(section)
 
+    def sort(self, column, order):
+        col = self._df.columns[column]
+        ascending = order == Qt.SortOrder.AscendingOrder
 
-#GŁÓWNA APLIKACJA
+        self.layoutAboutToBeChanged.emit()
+
+        try:
+            numeric_series = pd.to_numeric(self._df[col], errors="coerce")
+
+            if not numeric_series.isna().all():
+                sorted_df = self._df.assign(_sort_col=numeric_series) \
+                    .sort_values("_sort_col", ascending=ascending) \
+                    .drop(columns="_sort_col")
+            else:
+                sorted_df = self._df.assign(
+                    _sort_col=self._df[col].astype(str).map(locale.strxfrm)
+                ).sort_values("_sort_col", ascending=ascending) \
+                    .drop(columns="_sort_col")
+
+        except:
+            sorted_df = self._df.sort_values(col, ascending=ascending)
+
+        self._df = sorted_df.reset_index(drop=True)
+
+        self.layoutChanged.emit()
+
+# =========================
+# APLIKACJA
+# =========================
+
 class DataApp(QWidget):
 
     def __init__(self):
@@ -51,16 +88,15 @@ class DataApp(QWidget):
         self.setWindowTitle("Analiza danych")
         self.setGeometry(100, 100, 1300, 800)
 
-        self.data = None
-        self.filtered_data = None
+        self.original_df = None
+        self.filtered_df = None
 
         self.init_ui()
 
     def init_ui(self):
-        main_layout = QHBoxLayout()
-        self.setLayout(main_layout)
+        main_layout = QHBoxLayout(self)
 
-#LEWY PANEL
+        # ===== LEWY PANEL =====
         sidebar = QVBoxLayout()
 
         self.btn_load = QPushButton("Wczytaj plik")
@@ -68,7 +104,6 @@ class DataApp(QWidget):
         self.btn_filter = QPushButton("Filtrowanie danych")
         self.btn_stats = QPushButton("Analiza statystyczna")
         self.btn_plots = QPushButton("Wykresy")
-        self.btn_export = QPushButton("Eksport PDF")
 
         for btn in [
             self.btn_load,
@@ -76,14 +111,13 @@ class DataApp(QWidget):
             self.btn_filter,
             self.btn_stats,
             self.btn_plots,
-            self.btn_export
         ]:
             btn.setFixedHeight(40)
             sidebar.addWidget(btn)
 
         sidebar.addStretch()
 
-#STACK - żEBY BYŁY WIDOCZNE PO KLIKNIĘCIU PANELI
+        # ===== STACK =====
         self.stack = QStackedWidget()
 
         self.preview_page = self.create_preview_page()
@@ -99,52 +133,75 @@ class DataApp(QWidget):
         main_layout.addLayout(sidebar, 1)
         main_layout.addWidget(self.stack, 4)
 
-#POŁĄCZENIA - PRZEŁĄCZA STAKI
+        # ===== POŁĄCZENIA =====
         self.btn_load.clicked.connect(self.load_file)
         self.btn_preview.clicked.connect(lambda: self.stack.setCurrentWidget(self.preview_page))
         self.btn_filter.clicked.connect(lambda: self.stack.setCurrentWidget(self.filter_page))
         self.btn_stats.clicked.connect(self.show_stats)
         self.btn_plots.clicked.connect(lambda: self.stack.setCurrentWidget(self.plots_page))
-        self.btn_export.clicked.connect(self.export_pdf)
 
-#STRONY - TWORZY PODSTRONY DLA KOLUMN
+    # =========================
+    # STRONY
+    # =========================
 
     def create_preview_page(self):
         page = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(page)
 
         self.preview_view = QTableView()
         self.preview_view.setSortingEnabled(True)
 
         layout.addWidget(self.preview_view)
-        page.setLayout(layout)
         return page
 
     def create_filter_page(self):
         page = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(page)
+
+        self.species_combo = QComboBox()
+        self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
+
+        self.mocznik_input = QLineEdit()
+        self.mocznik_input.setPlaceholderText("Mocznik (np. >40; 70)")
+
+        self.kreatynina_input = QLineEdit()
+        self.kreatynina_input.setPlaceholderText("Kreatynina (np. <2)")
+
+        self.fosfor_input = QLineEdit()
+        self.fosfor_input.setPlaceholderText("Fosfor (np. >5)")
+
+        self.apply_button = QPushButton("Zastosuj filtry")
+        self.clear_button = QPushButton("Wyczyść filtry")
 
         self.filter_view = QTableView()
         self.filter_view.setSortingEnabled(True)
-        self.filter_view.horizontalHeader().setSectionsMovable(True)
 
+        layout.addWidget(QLabel("Gatunek:"))
+        layout.addWidget(self.species_combo)
+        layout.addWidget(self.mocznik_input)
+        layout.addWidget(self.kreatynina_input)
+        layout.addWidget(self.fosfor_input)
+        layout.addWidget(self.apply_button)
+        layout.addWidget(self.clear_button)
         layout.addWidget(self.filter_view)
-        page.setLayout(layout)
+
+        self.apply_button.clicked.connect(self.apply_filter)
+        self.clear_button.clicked.connect(self.clear_filters)
+
         return page
 
     def create_stats_page(self):
         page = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(page)
 
         self.stats_view = QTableView()
-
         layout.addWidget(self.stats_view)
-        page.setLayout(layout)
+
         return page
 
     def create_plots_page(self):
         page = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(page)
 
         self.combo_x = QComboBox()
         self.combo_y = QComboBox()
@@ -158,13 +215,13 @@ class DataApp(QWidget):
         layout.addWidget(self.btn_generate_plot)
         layout.addWidget(self.canvas)
 
-        page.setLayout(layout)
-
         self.btn_generate_plot.clicked.connect(self.generate_plot)
 
         return page
 
-#WCZYTANIE PLIKU
+    # =========================
+    # LOGIKA
+    # =========================
 
     def load_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -179,73 +236,109 @@ class DataApp(QWidget):
 
         try:
             if file_path.endswith(".xlsx"):
-                self.data = pd.read_excel(file_path, engine="openpyxl", header=1)
+                df = pd.read_excel(file_path, engine="openpyxl", header=1)
             elif file_path.endswith(".csv"):
                 self.data = pd.read_csv(file_path)
+            else:
+                return
 
-            self.filtered_data = self.data.copy()
+            self.original_df = df
+            self.filtered_df = df.copy()
 
-            model = PandasModel(self.data)
-            self.preview_view.setModel(model)
-            self.filter_view.setModel(PandasModel(self.filtered_data))
+            self.preview_model = PandasModel(self.original_df)
+            self.filter_model = PandasModel(self.filtered_df)
+
+            self.preview_view.setModel(self.preview_model)
+            self.filter_view.setModel(self.filter_model)
 
             self.combo_x.clear()
             self.combo_y.clear()
-            self.combo_x.addItems(self.data.columns)
-            self.combo_y.addItems(self.data.columns)
+            self.combo_x.addItems(df.columns)
+            self.combo_y.addItems(df.columns)
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
 
-    def show_stats(self):
-        if self.data is None:
+    def apply_filter(self):
+        if self.original_df is None:
             return
 
-        stats = self.data.describe()
+        df = self.original_df.copy()
+
+        species = self.species_combo.currentText()
+        if species != "Wszystkie":
+            df = df[df["Gatunek"] == species]
+
+        if self.mocznik_input.text().strip():
+            df = self.apply_numeric_filter(df, "Mocznik [mg/dl]", self.mocznik_input.text())
+
+        if self.kreatynina_input.text().strip():
+            df = self.apply_numeric_filter(df, "Kreatynina [mg/dl]", self.kreatynina_input.text())
+
+        if self.fosfor_input.text().strip():
+            df = self.apply_numeric_filter(df, "Fosfor [mg/dl]", self.fosfor_input.text())
+
+        self.filtered_df = df
+        self.filter_model.update_data(self.filtered_df)
+
+    def apply_numeric_filter(self, df, column_name, condition):
+        series = pd.to_numeric(df[column_name], errors="coerce")
+        parts = condition.split(";")
+
+        for part in parts:
+            part = part.strip()
+
+            if part.startswith(">"):
+                df = df[series > float(part[1:])]
+            elif part.startswith("<"):
+                df = df[series < float(part[1:])]
+            else:
+                df = df[series == float(part)]
+
+            series = pd.to_numeric(df[column_name], errors="coerce")
+
+        return df
+
+    def clear_filters(self):
+        if self.original_df is None:
+            return
+
+        self.species_combo.setCurrentIndex(0)
+        self.mocznik_input.clear()
+        self.kreatynina_input.clear()
+        self.fosfor_input.clear()
+
+        self.filtered_df = self.original_df.copy()
+        self.filter_model.update_data(self.filtered_df)
+
+    def show_stats(self):
+        if self.filtered_df is None:
+            return
+
+        stats = self.filtered_df.describe()
         self.stats_view.setModel(PandasModel(stats))
         self.stack.setCurrentWidget(self.stats_page)
 
     def generate_plot(self):
-        if self.data is None:
+        if self.filtered_df is None:
             return
 
         x_col = self.combo_x.currentText()
         y_col = self.combo_y.currentText()
 
+        df = self.filtered_df
+
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        ax.scatter(self.data[x_col], self.data[y_col])
+        ax.scatter(df[x_col], df[y_col])
         ax.set_xlabel(x_col)
         ax.set_ylabel(y_col)
         self.canvas.draw()
 
-    def export_pdf(self):
-        if self.data is None:
-            return
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Zapisz PDF",
-            "",
-            "PDF Files (*.pdf)"
-        )
-
-        if not file_path:
-            return
-
-        doc = SimpleDocTemplate(file_path)
-        elements = []
-
-        styles = getSampleStyleSheet()
-        elements.append(Paragraph("Eksport danych", styles['Heading1']))
-        elements.append(Spacer(1, 12))
-
-        elements.append(Paragraph(str(self.data.head()), styles['Normal']))
-
-        doc.build(elements)
-
-
-# ================= START =================
+# =========================
+# START
+# =========================
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
