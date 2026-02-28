@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="b5eb3630-b14f-4953-a98a-4785366566df" name="Changes" comment="push">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Nerkowe.py" beforeDir="false" afterPath="$PROJECT_DIR$/Nerkowe.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -56,6 +55,7 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python tests.Doctests in common.executor": "Run",
+    "Python.Nerkbackup.executor": "Run",
     "Python.Nerkowe.executor": "Run",
     "Python.backup.executor": "Run",
     "Python.dane.executor": "Run",
@@ -377,7 +377,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772287402260</updated>
     </task>
-    <option name="localTasksCounter" value="37" />
+    <task id="LOCAL-00037" summary="push">
+      <option name="closed" value="true" />
+      <created>1772288107153</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1772288107153</updated>
+    </task>
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">

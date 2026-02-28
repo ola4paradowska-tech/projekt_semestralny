@@ -451,10 +451,11 @@ class DataApp(QWidget):
 
     def apply_numeric_filter(self, df, column_name, condition):
         series = pd.to_numeric(df[column_name], errors="coerce")
-        parts = condition.split(";")
+        parts = [p.strip() for p in condition.split(";") if p.strip()]
+
+        mask = pd.Series(False, index=df.index)
 
         for part in parts:
-            part = part.strip()
 
             # zakres
             if "-" in part and not part.startswith("-"):
@@ -462,29 +463,32 @@ class DataApp(QWidget):
                     min_val, max_val = part.split("-")
                     min_val = float(min_val.strip())
                     max_val = float(max_val.strip())
-
-                    df = df[
-                        ((series >= min_val) & (series <= max_val))
-                        | (series.isna())
-                        ]
+                    mask |= (series >= min_val) & (series <= max_val)
                 except:
-                    pass
+                    continue
 
             elif part.startswith(">"):
-                value = float(part[1:])
-                df = df[(series > value) | (series.isna())]
+                try:
+                    value = float(part[1:])
+                    mask |= series > value
+                except:
+                    continue
 
             elif part.startswith("<"):
-                value = float(part[1:])
-                df = df[(series < value) | (series.isna())]
+                try:
+                    value = float(part[1:])
+                    mask |= series < value
+                except:
+                    continue
 
             else:
-                value = float(part)
-                df = df[(series == value) | (series.isna())]
+                try:
+                    value = float(part)
+                    mask |= series == value
+                except:
+                    continue
 
-            series = pd.to_numeric(df[column_name], errors="coerce")
-
-        return df
+        return df[mask | series.isna()]
 
     def clear_filters(self):
         if self.original_df is None:
