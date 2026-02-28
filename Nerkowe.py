@@ -156,6 +156,46 @@ class DataApp(QWidget):
                 except:
                     continue
 
+    def calculate_status(self, df):
+
+        statuses = []
+
+        for _, row in df.iterrows():
+            species = str(row["Gatunek"]).strip()
+
+            if species not in self.ranges:
+                statuses.append("Brak zakresu")
+                continue
+
+            abnormal_count = 0
+
+            for param, (min_val, max_val) in self.ranges[species].items():
+                if param not in df.columns:
+                    continue
+
+                try:
+                    value = float(row[param])
+                except:
+                    continue
+
+                if value < min_val or value > max_val:
+                    abnormal_count += 1
+
+            # klasyfikacja
+            if abnormal_count == 0:
+                statuses.append("Zdrowy")
+            elif abnormal_count == 1:
+                statuses.append("Łagodnie Chory")
+            elif 2 <= abnormal_count <= 3:
+                statuses.append("Umiarkowanie Chory")
+            else:
+                statuses.append("Ciężko Chory")
+
+        df_with_status = df.copy()
+        df_with_status["Status"] = statuses
+
+        return df_with_status
+
     def init_ui(self):
         main_layout = QHBoxLayout(self)
 
@@ -229,7 +269,13 @@ class DataApp(QWidget):
         self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
 
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["Wszystkie", "Zdrowe", "Poza normą"])
+        self.status_combo.addItems([
+            "Wszystkie",
+            "Zdrowy",
+            "Łagodnie Chory",
+            "Umiarkowanie Chory",
+            "Ciężko Chory"
+        ])
 
         species_layout.addWidget(QLabel("Stan:"))
         species_layout.addWidget(self.status_combo)
@@ -359,6 +405,8 @@ class DataApp(QWidget):
             )
             self.filtered_df = df.copy()
 
+            self.original_df = self.calculate_status(self.original_df)
+            self.filtered_df = self.calculate_status(self.filtered_df)
             self.preview_model = PandasModel(self.original_df, self.ranges)
             self.filter_model = PandasModel(self.filtered_df, self.ranges)
 
@@ -377,20 +425,26 @@ class DataApp(QWidget):
         if self.original_df is None:
             return
 
-        df = self.original_df.copy()
+        df = self.original_df.drop(columns=["Status"], errors="ignore").copy()
 
+        # Gatunek
         species = self.species_combo.currentText()
         if species != "Wszystkie":
             df = df[df["Gatunek"] == species]
 
-        status = self.status_combo.currentText()
-        if status != "Wszystkie":
-            df = self.filter_by_health_status(df, status)
-
+        # Filtry liczbowe
         for column, widget in self.numeric_filters.items():
             condition = widget.text().strip()
             if condition:
                 df = self.apply_numeric_filter(df, column, condition)
+
+        # Liczymy status
+        df = self.calculate_status(df)
+
+        # Filtrujemy po nowym statusie (4 poziomy)
+        status = self.status_combo.currentText()
+        if status != "Wszystkie":
+            df = df[df["Status"] == status]
 
         self.filtered_df = df
         self.filter_model.update_data(self.filtered_df)
@@ -432,40 +486,6 @@ class DataApp(QWidget):
 
         return df
 
-    def filter_by_health_status(self, df, status):
-
-        result_rows = []
-
-        for _, row in df.iterrows():
-            species = str(row["Gatunek"]).strip()
-
-            if species not in self.ranges:
-                continue
-
-            is_abnormal = False
-
-            for param, (min_val, max_val) in self.ranges[species].items():
-                if param not in df.columns:
-                    continue
-
-                value = row[param]
-
-                try:
-                    value = float(value)
-                except:
-                    continue
-
-                if value < min_val or value > max_val:
-                    is_abnormal = True
-                    break
-
-            if status == "Poza normą" and is_abnormal:
-                result_rows.append(row)
-
-            elif status == "Zdrowe" and not is_abnormal:
-                result_rows.append(row)
-
-        return pd.DataFrame(result_rows)
     def clear_filters(self):
         if self.original_df is None:
             return
