@@ -5,7 +5,7 @@ locale.setlocale(locale.LC_COLLATE, "pl_PL.UTF-8")
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QStackedWidget,
-    QMessageBox, QTableView, QComboBox, QLineEdit
+    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
@@ -156,34 +156,62 @@ class DataApp(QWidget):
 
     def create_filter_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+        main_layout = QVBoxLayout(page)
 
+        # ===== GATUNEK =====
         self.species_combo = QComboBox()
         self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
 
-        self.mocznik_input = QLineEdit()
-        self.mocznik_input.setPlaceholderText("Mocznik (np. >40; 70)")
+        main_layout.addWidget(QLabel("Gatunek:"))
+        main_layout.addWidget(self.species_combo)
 
-        self.kreatynina_input = QLineEdit()
-        self.kreatynina_input.setPlaceholderText("Kreatynina (np. <2)")
+        # ===== SIATKA 3x3 =====
+        grid = QGridLayout()
 
-        self.fosfor_input = QLineEdit()
-        self.fosfor_input.setPlaceholderText("Fosfor (np. >5)")
+        self.numeric_filters = {}
 
+        # tu wpisz 9 kolumn, które chcesz filtrować
+        numeric_columns = [
+            "Mocznik [mg/dl]",
+            "Kreatynina [mg/dl]",
+            "Fosfor [mg/dl]",
+            "Sód [mg/dl]",
+            "Potas [mg/dl]",
+            "Wapń [mg/dl]",
+            "Albuminy [g/dl]",
+            "Białko całkowite [g/dl]",
+            "Stosunek Sodu do Potasu"
+        ]
+
+        row = 0
+        col = 0
+
+        for column in numeric_columns:
+            line_edit = QLineEdit()
+            line_edit.setPlaceholderText(f"{column} (np. >5; 10)")
+
+            grid.addWidget(line_edit, row, col)
+
+            self.numeric_filters[column] = line_edit
+
+            col += 1
+            if col == 3:
+                col = 0
+                row += 1
+
+        main_layout.addLayout(grid)
+
+        # ===== PRZYCISKI =====
         self.apply_button = QPushButton("Zastosuj filtry")
         self.clear_button = QPushButton("Wyczyść filtry")
 
+        main_layout.addWidget(self.apply_button)
+        main_layout.addWidget(self.clear_button)
+
+        # ===== TABELA =====
         self.filter_view = QTableView()
         self.filter_view.setSortingEnabled(True)
-
-        layout.addWidget(QLabel("Gatunek:"))
-        layout.addWidget(self.species_combo)
-        layout.addWidget(self.mocznik_input)
-        layout.addWidget(self.kreatynina_input)
-        layout.addWidget(self.fosfor_input)
-        layout.addWidget(self.apply_button)
-        layout.addWidget(self.clear_button)
-        layout.addWidget(self.filter_view)
+        main_layout.addWidget(self.filter_view)
 
         self.apply_button.clicked.connect(self.apply_filter)
         self.clear_button.clicked.connect(self.clear_filters)
@@ -243,6 +271,11 @@ class DataApp(QWidget):
                 return
 
             self.original_df = df
+            self.original_df["Gatunek"] = (
+                self.original_df["Gatunek"]
+                .astype(str)
+                .str.strip()
+            )
             self.filtered_df = df.copy()
 
             self.preview_model = PandasModel(self.original_df)
@@ -269,14 +302,10 @@ class DataApp(QWidget):
         if species != "Wszystkie":
             df = df[df["Gatunek"] == species]
 
-        if self.mocznik_input.text().strip():
-            df = self.apply_numeric_filter(df, "Mocznik [mg/dl]", self.mocznik_input.text())
-
-        if self.kreatynina_input.text().strip():
-            df = self.apply_numeric_filter(df, "Kreatynina [mg/dl]", self.kreatynina_input.text())
-
-        if self.fosfor_input.text().strip():
-            df = self.apply_numeric_filter(df, "Fosfor [mg/dl]", self.fosfor_input.text())
+        for column, widget in self.numeric_filters.items():
+            condition = widget.text().strip()
+            if condition:
+                df = self.apply_numeric_filter(df, column, condition)
 
         self.filtered_df = df
         self.filter_model.update_data(self.filtered_df)
@@ -304,9 +333,9 @@ class DataApp(QWidget):
             return
 
         self.species_combo.setCurrentIndex(0)
-        self.mocznik_input.clear()
-        self.kreatynina_input.clear()
-        self.fosfor_input.clear()
+
+        for widget in self.numeric_filters.values():
+            widget.clear()
 
         self.filtered_df = self.original_df.copy()
         self.filter_model.update_data(self.filtered_df)
