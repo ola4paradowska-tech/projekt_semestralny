@@ -158,12 +158,24 @@ class DataApp(QWidget):
         page = QWidget()
         main_layout = QVBoxLayout(page)
 
-        # ===== GATUNEK =====
+        # ===== GATUNEK + PODPOWIEDŹ W JEDNEJ LINII =====
+        species_layout = QHBoxLayout()
+
+        label = QLabel("Gatunek:")
         self.species_combo = QComboBox()
         self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
 
-        main_layout.addWidget(QLabel("Gatunek:"))
-        main_layout.addWidget(self.species_combo)
+        help_button = QPushButton("?")
+        help_button.setFixedSize(24, 24)
+        help_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        help_button.clicked.connect(self.show_filter_help)
+
+        species_layout.addWidget(label)
+        species_layout.addWidget(self.species_combo)
+        species_layout.addWidget(help_button)
+        species_layout.addStretch()
+
+        main_layout.addLayout(species_layout)
 
         # ===== SIATKA 3x3 =====
         grid = QGridLayout()
@@ -188,7 +200,7 @@ class DataApp(QWidget):
 
         for column in numeric_columns:
             line_edit = QLineEdit()
-            line_edit.setPlaceholderText(f"{column} (np. >5; 10)")
+            line_edit.setPlaceholderText(f"{column}")
 
             grid.addWidget(line_edit, row, col)
 
@@ -317,12 +329,31 @@ class DataApp(QWidget):
         for part in parts:
             part = part.strip()
 
-            if part.startswith(">"):
-                df = df[series > float(part[1:])]
+            # zakres
+            if "-" in part and not part.startswith("-"):
+                try:
+                    min_val, max_val = part.split("-")
+                    min_val = float(min_val.strip())
+                    max_val = float(max_val.strip())
+
+                    df = df[
+                        ((series >= min_val) & (series <= max_val))
+                        | (series.isna())
+                        ]
+                except:
+                    pass
+
+            elif part.startswith(">"):
+                value = float(part[1:])
+                df = df[(series > value) | (series.isna())]
+
             elif part.startswith("<"):
-                df = df[series < float(part[1:])]
+                value = float(part[1:])
+                df = df[(series < value) | (series.isna())]
+
             else:
-                df = df[series == float(part)]
+                value = float(part)
+                df = df[(series == value) | (series.isna())]
 
             series = pd.to_numeric(df[column_name], errors="coerce")
 
@@ -339,6 +370,20 @@ class DataApp(QWidget):
 
         self.filtered_df = self.original_df.copy()
         self.filter_model.update_data(self.filtered_df)
+
+    def show_filter_help(self):
+        QMessageBox.information(
+            self,
+            "Jak działa filtrowanie?",
+            "Możliwe formaty:\n\n"
+            ">5  — większe niż 5\n"
+            "<3  — mniejsze niż 3\n"
+            "7   — równe 7\n"
+            "4-10 — zakres 4 do 10\n"
+            ">5; <10 — wiele warunków\n"
+            "4-10; >20 — kombinacje\n\n"
+            "Brak danych (NaN) nie jest usuwany."
+        )
 
     def show_stats(self):
         if self.filtered_df is None:
