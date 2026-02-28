@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QStackedWidget, QMessageBox
 )
 from PyQt6.QtCore import Qt
-
+#Wygląd Widgeta
 class DataApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -22,7 +22,7 @@ class DataApp(QWidget):
         main_layout = QHBoxLayout()
         self.setLayout(main_layout)
 
-        # LEWY PANEL (STAŁE MENU)
+# LEWY PANEL (STAŁE MENU)
         self.sidebar = QVBoxLayout()
 
         self.btn_load = QPushButton("Wybierz folder")
@@ -45,7 +45,7 @@ class DataApp(QWidget):
 
         self.sidebar.addStretch()
 
-        # PRAWA CZĘŚĆ (OBSZAR DANYCH)
+# PRAWA CZĘŚĆ (OBSZAR DANYCH)
         self.content_area = QVBoxLayout()
         self.content_label = QLabel("Tutaj będą wyświetlane dane")
         self.content_label.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -55,15 +55,15 @@ class DataApp(QWidget):
         self.content_area.addWidget(self.content_label)
         self.content_area.addWidget(self.table)
 
-        # DODANIE DO GŁÓWNEGO UKŁADU
+# DODANIE DO GŁÓWNEGO UKŁADU
         main_layout.addLayout(self.sidebar, 1)
         main_layout.addLayout(self.content_area, 4)
 
-        # POŁĄCZENIA
+# POŁĄCZENIA
         self.btn_load.clicked.connect(self.load_folder)
         self.btn_preview.clicked.connect(self.preview_data)
         self.btn_stats.clicked.connect(self.show_statistics)
-
+# OTWORZENIE PLIKU
     def load_folder(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -103,7 +103,7 @@ class DataApp(QWidget):
         self.table.setRowCount(len(self.data))
         self.table.setColumnCount(len(self.data.columns))
         self.table.setHorizontalHeaderLabels(self.data.columns)
-
+# WYGLĄD TABELI
         for row in range(len(self.data)):
             for col in range(len(self.data.columns)):
                 value = self.data.iat[row, col]
