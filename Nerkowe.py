@@ -18,9 +18,10 @@ from matplotlib.figure import Figure
 # =========================
 
 class PandasModel(QAbstractTableModel):
-    def __init__(self, df=pd.DataFrame()):
+    def __init__(self, df=pd.DataFrame(), ranges=None):
         super().__init__()
         self._df = df
+        self.ranges = ranges or {}
 
     def update_data(self, df):
         self.layoutAboutToBeChanged.emit()
@@ -40,9 +41,30 @@ class PandasModel(QAbstractTableModel):
         value = self._df.iloc[index.row(), index.column()]
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if isinstance(value, float):
-                return f"{value:.2f}"
-            return str(value)
+
+            if pd.isna(value):
+                return "—"
+
+            display_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+
+            # sprawdzamy tylko jeśli mamy kolumnę Gatunek
+            if "Gatunek" in self._df.columns:
+                species = str(self._df.iloc[index.row()]["Gatunek"]).strip()
+                column_name = self._df.columns[index.column()]
+
+                if (
+                        species in self.ranges
+                        and column_name in self.ranges[species]
+                        and isinstance(value, (int, float))
+                ):
+                    min_val, max_val = self.ranges[species][column_name]
+
+                    if value < min_val:
+                        return display_value + " ↓"
+                    elif value > max_val:
+                        return display_value + " ↑"
+
+            return display_value
 
     def headerData(self, section, orientation, role):
         if role == Qt.ItemDataRole.DisplayRole:
@@ -90,8 +112,49 @@ class DataApp(QWidget):
 
         self.original_df = None
         self.filtered_df = None
+        self.ranges = {}
+        self.load_ranges()
 
         self.init_ui()
+
+    def load_ranges(self):
+        try:
+            ranges_df = pd.read_excel("zakresy.xlsx", engine="openpyxl", header=1)
+        except Exception:
+            self.ranges = {}
+            return
+
+        ranges_df.columns = ranges_df.columns.str.strip()
+
+        self.ranges = {}
+
+        # grupujemy po gatunku
+        for species in ranges_df["Gatunek"].unique():
+
+            species_rows = ranges_df[ranges_df["Gatunek"] == species]
+
+            min_row = species_rows[species_rows["Zakres"] == "Min"]
+            max_row = species_rows[species_rows["Zakres"] == "Max"]
+
+            if min_row.empty or max_row.empty:
+                continue
+
+            min_row = min_row.iloc[0]
+            max_row = max_row.iloc[0]
+
+            self.ranges.setdefault(species, {})
+
+            for column in ranges_df.columns:
+                if column in ["Gatunek", "Zakres"]:
+                    continue
+
+                try:
+                    min_val = float(str(min_row[column]).replace(",", "."))
+                    max_val = float(str(max_row[column]).replace(",", "."))
+
+                    self.ranges[species][column] = (min_val, max_val)
+                except:
+                    continue
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -164,6 +227,12 @@ class DataApp(QWidget):
         label = QLabel("Gatunek:")
         self.species_combo = QComboBox()
         self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
+
+        self.status_combo = QComboBox()
+        self.status_combo.addItems(["Wszystkie", "Zdrowe", "Poza normą"])
+
+        species_layout.addWidget(QLabel("Stan:"))
+        species_layout.addWidget(self.status_combo)
 
         help_button = QPushButton("?")
         help_button.setFixedSize(24, 24)
@@ -290,8 +359,8 @@ class DataApp(QWidget):
             )
             self.filtered_df = df.copy()
 
-            self.preview_model = PandasModel(self.original_df)
-            self.filter_model = PandasModel(self.filtered_df)
+            self.preview_model = PandasModel(self.original_df, self.ranges)
+            self.filter_model = PandasModel(self.filtered_df, self.ranges)
 
             self.preview_view.setModel(self.preview_model)
             self.filter_view.setModel(self.filter_model)
@@ -313,6 +382,10 @@ class DataApp(QWidget):
         species = self.species_combo.currentText()
         if species != "Wszystkie":
             df = df[df["Gatunek"] == species]
+
+        status = self.status_combo.currentText()
+        if status != "Wszystkie":
+            df = self.filter_by_health_status(df, status)
 
         for column, widget in self.numeric_filters.items():
             condition = widget.text().strip()
@@ -359,6 +432,40 @@ class DataApp(QWidget):
 
         return df
 
+    def filter_by_health_status(self, df, status):
+
+        result_rows = []
+
+        for _, row in df.iterrows():
+            species = str(row["Gatunek"]).strip()
+
+            if species not in self.ranges:
+                continue
+
+            is_abnormal = False
+
+            for param, (min_val, max_val) in self.ranges[species].items():
+                if param not in df.columns:
+                    continue
+
+                value = row[param]
+
+                try:
+                    value = float(value)
+                except:
+                    continue
+
+                if value < min_val or value > max_val:
+                    is_abnormal = True
+                    break
+
+            if status == "Poza normą" and is_abnormal:
+                result_rows.append(row)
+
+            elif status == "Zdrowe" and not is_abnormal:
+                result_rows.append(row)
+
+        return pd.DataFrame(result_rows)
     def clear_filters(self):
         if self.original_df is None:
             return
