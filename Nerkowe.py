@@ -5,7 +5,7 @@ locale.setlocale(locale.LC_COLLATE, "pl_PL.UTF-8")
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QStackedWidget,
-    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout
+    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout, QCheckBox
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 # =========================
 
 class PandasModel(QAbstractTableModel):
+
     def __init__(self, df=pd.DataFrame(), ranges=None):
         super().__init__()
         self._df = df
@@ -99,6 +100,40 @@ class PandasModel(QAbstractTableModel):
 
         self.layoutChanged.emit()
 
+class MultiSelectComboBox(QComboBox):
+
+        def __init__(self):
+            super().__init__()
+
+            self.setEditable(True)
+            self.lineEdit().setReadOnly(True)
+
+            model = self.model()
+
+            model.itemChanged.connect(self.update_text)
+
+        def addItems(self, items):
+            for text in items:
+                item = self.model().item(self.count())
+                self.addItem(text)
+
+                item = self.model().item(self.count() - 1, 0)
+                item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+                item.setCheckState(Qt.CheckState.Unchecked)
+
+        def checked_items(self):
+            checked = []
+            for i in range(self.count()):
+                item = self.model().item(i)
+                if item.checkState() == Qt.CheckState.Checked:
+                    checked.append(item.text())
+            return checked
+
+        def update_text(self):
+            checked = self.checked_items()
+            self.lineEdit().setText(", ".join(checked))
+
+
 # =========================
 # APLIKACJA
 # =========================
@@ -107,14 +142,35 @@ class DataApp(QWidget):
 
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Analiza danych")
         self.setGeometry(100, 100, 1300, 800)
 
         self.original_df = None
         self.filtered_df = None
         self.ranges = {}
-        self.load_ranges()
 
+        # MAPOWANIA PARAMETRÓW
+        self.param_map = {
+            "Mocznik": "Mocznik [mg/dl]",
+            "Kreatynina": "Kreatynina [mg/dl]",
+            "Fosfor": "Fosfor [mg/dl]",
+            "Sód": "Sód [mg/dl]",
+            "Potas": "Potas [mg/dl]",
+            "Wapń": "Wapń [mg/dl]",
+            "Albuminy": "Albuminy [g/dl]",
+            "Białko całkowite": "Białko całkowite [g/dl]",
+            "Stosunek Na/K": "Stosunek Sodu do Potasu"
+        }
+
+        # MAPOWANIA STATYSTYK
+        self.stats_map = {
+            "średnia": "mean",
+            "mediana": "median",
+            "odchylenie standardowe": "std"
+        }
+
+        self.load_ranges()
         self.init_ui()
 
     def load_ranges(self):
@@ -243,6 +299,58 @@ class DataApp(QWidget):
         self.btn_stats.clicked.connect(self.show_stats)
         self.btn_plots.clicked.connect(lambda: self.stack.setCurrentWidget(self.plots_page))
 
+    def calculate_stats(self):
+
+        if self.filtered_df is None:
+            return
+
+        df = self.filtered_df.copy()
+
+        species = self.stats_species.checked_items()
+        status = self.stats_status.currentText()
+        params_gui = self.stats_param.checked_items()
+        stats_gui = self.stats_stats.checked_items()
+
+        params = [self.param_map[p] for p in params_gui]
+        stats = [self.stats_map[s] for s in stats_gui]
+
+        if not params:
+            QMessageBox.warning(self, "Błąd", "Wybierz przynajmniej jeden parametr")
+            return
+
+        if not stats:
+            QMessageBox.warning(self, "Błąd", "Wybierz przynajmniej jedną statystykę")
+            return
+
+        if species:
+            df = df[df["Gatunek"].isin(species)]
+
+        if status != "Wszystkie":
+            df = df[df["Status"] == status]
+
+        for p in params:
+            df[p] = pd.to_numeric(df[p], errors="coerce")
+
+        result = df.groupby("Gatunek")[params].agg(stats)
+
+        result = result.stack(level=0).reset_index()
+
+        result = result.rename(columns={
+            "level_1": "Parametr"
+        })
+
+        result["Parametr"] = result["Parametr"].str.split("[").str[0].str.strip()
+
+        stat_labels = {
+            "mean": "średnia",
+            "median": "mediana",
+            "std": "odchylenie standardowe"
+        }
+
+        result = result.rename(columns=stat_labels)
+        result = result.sort_values(["Parametr", "Gatunek"]).reset_index(drop=True)
+
+        self.stats_view.setModel(PandasModel(result))
     # =========================
     # STRONY
     # =========================
@@ -349,8 +457,60 @@ class DataApp(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
 
+        controls = QHBoxLayout()
+
+        self.stats_species = MultiSelectComboBox()
+        self.stats_species.addItems(["Pies", "Kot", "Koń"])
+
+
+        self.stats_param = MultiSelectComboBox()
+        self.stats_param.addItems([
+            "Mocznik",
+            "Kreatynina",
+            "Fosfor",
+            "Sód",
+            "Potas",
+            "Wapń",
+            "Albuminy",
+            "Białko całkowite",
+            "Stosunek Na/K"
+        ])
+
+        self.stats_stats = MultiSelectComboBox()
+        self.stats_stats.addItems(["średnia", "mediana", "odchylenie standardowe"])
+
+        self.stats_status = QComboBox()
+        self.stats_status.addItems([
+            "Wszystkie",
+            "Zdrowy",
+            "Łagodnie Chory",
+            "Umiarkowanie Chory",
+            "Ciężko Chory"
+        ])
+        self.btn_stats_calc = QPushButton("Oblicz")
+
+        controls.addWidget(QLabel("Gatunek"))
+        controls.addWidget(self.stats_species)
+
+        controls.addWidget(QLabel("Status"))
+        controls.addWidget(self.stats_status)
+
+        controls.addWidget(QLabel("Parametry"))
+        controls.addWidget(self.stats_param)
+
+        controls.addWidget(QLabel("Statystyki"))
+        controls.addWidget(self.stats_stats)
+
+        controls.addWidget(self.btn_stats_calc)
+
+        layout.addLayout(controls)
+
         self.stats_view = QTableView()
+        self.stats_view.setSortingEnabled(True)
+
         layout.addWidget(self.stats_view)
+
+        self.btn_stats_calc.clicked.connect(self.calculate_stats)
 
         return page
 
@@ -519,11 +679,6 @@ class DataApp(QWidget):
         )
 
     def show_stats(self):
-        if self.filtered_df is None:
-            return
-
-        stats = self.filtered_df.describe()
-        self.stats_view.setModel(PandasModel(stats))
         self.stack.setCurrentWidget(self.stats_page)
 
     def generate_plot(self):
