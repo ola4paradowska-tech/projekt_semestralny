@@ -1,11 +1,12 @@
 import sys
 import pandas as pd
+import numpy as np
 import locale
 locale.setlocale(locale.LC_COLLATE, "pl_PL.UTF-8")
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QStackedWidget,
-    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout,
+    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout, QCheckBox
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
@@ -182,6 +183,18 @@ class DataApp(QWidget):
             "Umiarkowanie Chory",
             "Ciężko Chory"
         ]
+
+        self.param_colors = {
+            "Mocznik": "#E8D52E",  # żółty (gold)
+            "Kreatynina": "#B32222",  # czerwony
+            "Fosfor": "#4E8BCF",  # niebieski
+            "Sód": "#E3983B",  # pomarańczowy
+            "Potas": "#D184CF",  # różowy
+            "Wapń": "#6BD6CB",  # turkusowy
+            "Albuminy": "#D1DB63",  # zielono-żółty
+            "Białko całkowite": "#297347",  # ciemno zielony
+            "Stosunek Na/K": "#7F7F7F"  # szary
+        }
 
         self.load_ranges()
         self.init_ui()
@@ -414,6 +427,9 @@ class DataApp(QWidget):
         if len(y_params_gui) == 0:
             QMessageBox.warning(self, "Błąd", "Wybierz przynajmniej jeden parametr Y")
             return
+        if x_gui in y_params_gui:
+            QMessageBox.warning(self, "Błąd", "Parametr X nie może być jednocześnie parametrem Y")
+            return
 
         df = df[df["Gatunek"] == species]
 
@@ -428,17 +444,59 @@ class DataApp(QWidget):
         x = pd.to_numeric(df[x_param], errors="coerce")
 
         for param_gui in y_params_gui:
+
             param = self.param_map[param_gui]
+
             y = pd.to_numeric(df[param], errors="coerce")
 
-            ax.scatter(x, y, label=param_gui)
+            data = pd.DataFrame({"x": x, "y": y}).dropna()
+            if self.line_remove_outliers.isChecked():
+                data = self.remove_outliers_iqr(data, "x", "y")
+            if len(data) < 2:
+                continue
+
+            x_valid = data["x"]
+            y_valid = data["y"]
+
+            # punkty pomiarowe
+            color = self.param_colors.get(param_gui, "black")
+
+            ax.scatter(x_valid, y_valid, color=color, label=param_gui)
+
+            # linia regresji
+            coef = np.polyfit(x_valid, y_valid, 1)
+            poly = np.poly1d(coef)
+
+            x_line = np.linspace(x_valid.min(), x_valid.max(), 100)
+            y_line = poly(x_line)
+
+            ax.plot(x_line, y_line, color=color)
 
         ax.set_xlabel(x_gui)
-        ax.set_ylabel("Wartość parametrów")
+        ax.set_ylabel("Stężenie [mg/dl]")
         ax.legend()
         ax.grid(True)
 
         self.line_canvas.draw()
+
+    def remove_outliers_iqr(self, df, x_col, y_col):
+
+        Q1_x = df[x_col].quantile(0.25)
+        Q3_x = df[x_col].quantile(0.75)
+        IQR_x = Q3_x - Q1_x
+
+        Q1_y = df[y_col].quantile(0.25)
+        Q3_y = df[y_col].quantile(0.75)
+        IQR_y = Q3_y - Q1_y
+
+        mask = (
+                (df[x_col] >= Q1_x - 1.5 * IQR_x) &
+                (df[x_col] <= Q3_x + 1.5 * IQR_x) &
+                (df[y_col] >= Q1_y - 1.5 * IQR_y) &
+                (df[y_col] <= Q3_y + 1.5 * IQR_y)
+        )
+
+        return df[mask]
 
     def generate_bar_plot(self):
 
@@ -462,11 +520,14 @@ class DataApp(QWidget):
         self.bar_figure.clear()
         ax = self.bar_figure.add_subplot(111)
 
+        color = self.param_colors.get(param_gui, "gray")
+
         ax.bar(
             stats.index,
             stats["mean"],
             yerr=stats["std"],
-            capsize=5
+            capsize=5,
+            color=color
         )
 
         ax.set_title(param_gui)
@@ -501,10 +562,28 @@ class DataApp(QWidget):
             data.append(values)
             species_list.append(species)
 
-        ax.boxplot(data, labels=species_list)
+        color = self.param_colors.get(param_gui, "gray")
+
+        box = ax.boxplot(
+            data,
+            tick_labels=species_list,
+            patch_artist=True,
+            medianprops=dict(color="black", linewidth=2)
+        )
+
+        for patch in box['boxes']:
+            patch.set_facecolor(color)
 
         ax.set_title(param_gui)
-        ax.set_ylabel("Wartość")
+
+        if param_gui == "Stosunek Na/K":
+            ax.set_ylabel("Stosunek Na/K")
+        else:
+            ax.set_ylabel("Stężenie [mg/dl]")
+        ax.grid(axis="y", linestyle="--", alpha=0.6)
+
+        if param_gui == "Stosunek Na/K":
+            ax.set_ylim(0, 50)
 
         self.box_canvas.draw()
 
@@ -514,7 +593,7 @@ class DataApp(QWidget):
 
         self.line_y_params.clear()
 
-        params = self.param_names.copy()
+        params = [p for p in self.param_names if p != "Stosunek Na/K"]
 
         if selected_x in params:
             params.remove(selected_x)
@@ -856,16 +935,21 @@ class DataApp(QWidget):
         self.line_species = QComboBox()
         self.line_species.addItems(["Pies", "Kot", "Koń"])
 
+        line_params = [p for p in self.param_names if p != "Stosunek Na/K"]
+
         self.line_x_param = QComboBox()
-        self.line_x_param.addItems(self.param_names)
+        self.line_x_param.addItems(line_params)
 
         self.line_y_params = MultiSelectComboBox()
-        self.line_y_params.addItems(self.param_names)
+        self.line_y_params.addItems(line_params)
 
         self.line_status = QComboBox()
         self.line_status.addItems(self.status_list)
 
         self.btn_line_generate = QPushButton("Generuj wykres")
+
+        self.line_remove_outliers = QCheckBox("Usuń wartości odstające")
+        controls.addWidget(self.line_remove_outliers)
 
         controls.addWidget(QLabel("Gatunek"))
         controls.addWidget(self.line_species)
