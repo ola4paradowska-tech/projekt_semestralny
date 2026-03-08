@@ -392,8 +392,10 @@ class DataApp(QWidget):
         try:
             if file_path.endswith(".xlsx"):
                 df = pd.read_excel(file_path, engine="openpyxl", header=1)
+
             elif file_path.endswith(".csv"):
-                self.data = pd.read_csv(file_path)
+                df = pd.read_csv(file_path)
+
             else:
                 return
 
