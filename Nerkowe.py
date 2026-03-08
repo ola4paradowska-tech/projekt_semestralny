@@ -880,7 +880,6 @@ class DataApp(QWidget):
 
             self.original_df = self.calculate_status(df)
             self.filtered_df = self.original_df.copy()
-            self.filtered_df = self.original_df.copy()
             self.preview_model = PandasModel(self.original_df, self.ranges)
             self.filter_model = PandasModel(self.filtered_df, self.ranges)
 
