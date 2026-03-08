@@ -5,7 +5,7 @@ locale.setlocale(locale.LC_COLLATE, "pl_PL.UTF-8")
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QStackedWidget,
-    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout, QCheckBox
+    QMessageBox, QTableView, QComboBox, QLineEdit, QGridLayout,
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
@@ -46,7 +46,10 @@ class PandasModel(QAbstractTableModel):
             if pd.isna(value):
                 return "—"
 
-            display_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+            if isinstance(value, (int, float)):
+                display_value = f"{value:.2f}"
+            else:
+                display_value = str(value)
 
             # sprawdzamy tylko jeśli mamy kolumnę Gatunek
             if "Gatunek" in self._df.columns:
@@ -72,7 +75,7 @@ class PandasModel(QAbstractTableModel):
             if orientation == Qt.Orientation.Horizontal:
                 return str(self._df.columns[section])
             else:
-                return str(section)
+                return str(section + 1)
 
     def sort(self, column, order):
         col = self._df.columns[column]
@@ -114,7 +117,6 @@ class MultiSelectComboBox(QComboBox):
 
         def addItems(self, items):
             for text in items:
-                item = self.model().item(self.count())
                 self.addItem(text)
 
                 item = self.model().item(self.count() - 1, 0)
@@ -150,7 +152,12 @@ class DataApp(QWidget):
         self.filtered_df = None
         self.ranges = {}
 
-        # MAPOWANIA PARAMETRÓW
+        # STAŁE LISTY
+        self.param_names = [
+            "Mocznik", "Kreatynina", "Fosfor", "Sód", "Potas",
+            "Wapń", "Albuminy", "Białko całkowite", "Stosunek Na/K"
+        ]
+
         self.param_map = {
             "Mocznik": "Mocznik [mg/dl]",
             "Kreatynina": "Kreatynina [mg/dl]",
@@ -163,12 +170,18 @@ class DataApp(QWidget):
             "Stosunek Na/K": "Stosunek Sodu do Potasu"
         }
 
-        # MAPOWANIA STATYSTYK
         self.stats_map = {
             "średnia": "mean",
             "mediana": "median",
             "odchylenie standardowe": "std"
         }
+        self.status_list = [
+            "Wszystkie",
+            "Zdrowy",
+            "Łagodnie Chory",
+            "Umiarkowanie Chory",
+            "Ciężko Chory"
+        ]
 
         self.load_ranges()
         self.init_ui()
@@ -366,9 +379,7 @@ class DataApp(QWidget):
         abnormal = self.calculate_abnormal_percent(df, params)
         result = result.stack(level=0).reset_index()
 
-        result = result.rename(columns={
-            "level_1": "Parametr"
-        })
+        result = result.rename(columns={"level_1": "Parametr"})
 
         result["Parametr"] = result["Parametr"].str.split("[").str[0].str.strip()
 
@@ -387,6 +398,128 @@ class DataApp(QWidget):
         )
 
         self.stats_view.setModel(PandasModel(result))
+
+    def generate_line_plot(self):
+
+        if self.filtered_df is None:
+            return
+
+        df = self.filtered_df.copy()
+
+        species = self.line_species.currentText()
+        x_gui = self.line_x_param.currentText()
+        y_params_gui = self.line_y_params.checked_items()
+        status = self.line_status.currentText()
+
+        if len(y_params_gui) == 0:
+            QMessageBox.warning(self, "Błąd", "Wybierz przynajmniej jeden parametr Y")
+            return
+
+        df = df[df["Gatunek"] == species]
+
+        if status != "Wszystkie":
+            df = df[df["Status"] == status]
+
+        x_param = self.param_map[x_gui]
+
+        self.line_figure.clear()
+        ax = self.line_figure.add_subplot(111)
+
+        x = pd.to_numeric(df[x_param], errors="coerce")
+
+        for param_gui in y_params_gui:
+            param = self.param_map[param_gui]
+            y = pd.to_numeric(df[param], errors="coerce")
+
+            ax.scatter(x, y, label=param_gui)
+
+        ax.set_xlabel(x_gui)
+        ax.set_ylabel("Wartość parametrów")
+        ax.legend()
+        ax.grid(True)
+
+        self.line_canvas.draw()
+
+    def generate_bar_plot(self):
+
+        if self.filtered_df is None:
+            return
+
+        df = self.filtered_df.copy()
+
+        param_gui = self.bar_param.currentText()
+        status = self.bar_status.currentText()
+
+        param = self.param_map[param_gui]
+
+        if status != "Wszystkie":
+            df = df[df["Status"] == status]
+
+        df[param] = pd.to_numeric(df[param], errors="coerce")
+
+        stats = df.groupby("Gatunek")[param].agg(["mean", "std"])
+
+        self.bar_figure.clear()
+        ax = self.bar_figure.add_subplot(111)
+
+        ax.bar(
+            stats.index,
+            stats["mean"],
+            yerr=stats["std"],
+            capsize=5
+        )
+
+        ax.set_title(param_gui)
+        ax.set_ylabel("Średnia ± odchylenie standardowe")
+
+        self.bar_canvas.draw()
+
+    def generate_box_plot(self):
+
+        if self.filtered_df is None:
+            return
+
+        df = self.filtered_df.copy()
+
+        param_gui = self.box_param.currentText()
+        status = self.box_status.currentText()
+
+        param = self.param_map[param_gui]
+
+        if status != "Wszystkie":
+            df = df[df["Status"] == status]
+
+        self.box_figure.clear()
+        ax = self.box_figure.add_subplot(111)
+
+        data = []
+        species_list = []
+
+        for species, group in df.groupby("Gatunek"):
+            values = pd.to_numeric(group[param], errors="coerce").dropna()
+
+            data.append(values)
+            species_list.append(species)
+
+        ax.boxplot(data, labels=species_list)
+
+        ax.set_title(param_gui)
+        ax.set_ylabel("Wartość")
+
+        self.box_canvas.draw()
+
+    def update_line_y_params(self):
+
+        selected_x = self.line_x_param.currentText()
+
+        self.line_y_params.clear()
+
+        params = self.param_names.copy()
+
+        if selected_x in params:
+            params.remove(selected_x)
+
+        self.line_y_params.addItems(params)
     # =========================
     # STRONY
     # =========================
@@ -413,13 +546,7 @@ class DataApp(QWidget):
         self.species_combo.addItems(["Wszystkie", "Pies", "Kot", "Koń"])
 
         self.status_combo = QComboBox()
-        self.status_combo.addItems([
-            "Wszystkie",
-            "Zdrowy",
-            "Łagodnie Chory",
-            "Umiarkowanie Chory",
-            "Ciężko Chory"
-        ])
+        self.status_combo.addItems(self.status_list)
 
         species_layout.addWidget(QLabel("Stan:"))
         species_layout.addWidget(self.status_combo)
@@ -500,29 +627,14 @@ class DataApp(QWidget):
 
 
         self.stats_param = MultiSelectComboBox()
-        self.stats_param.addItems([
-            "Mocznik",
-            "Kreatynina",
-            "Fosfor",
-            "Sód",
-            "Potas",
-            "Wapń",
-            "Albuminy",
-            "Białko całkowite",
-            "Stosunek Na/K"
-        ])
+        self.stats_param.addItems(self.param_names)
 
         self.stats_stats = MultiSelectComboBox()
         self.stats_stats.addItems(["średnia", "mediana", "odchylenie standardowe"])
 
         self.stats_status = QComboBox()
-        self.stats_status.addItems([
-            "Wszystkie",
-            "Zdrowy",
-            "Łagodnie Chory",
-            "Umiarkowanie Chory",
-            "Ciężko Chory"
-        ])
+        self.stats_status.addItems(self.status_list)
+
         self.btn_stats_calc = QPushButton("Oblicz")
 
         controls.addWidget(QLabel("Gatunek"))
@@ -551,22 +663,48 @@ class DataApp(QWidget):
         return page
 
     def create_plots_page(self):
+
         page = QWidget()
         layout = QVBoxLayout(page)
 
-        self.combo_x = QComboBox()
-        self.combo_y = QComboBox()
-        self.btn_generate_plot = QPushButton("Generuj wykres")
+        self.plot_stack = QStackedWidget()
 
-        self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
+        # ===== MENU WYBORU WYKRESU =====
+        menu_page = QWidget()
+        menu_layout = QVBoxLayout(menu_page)
+        self.plot_menu_page = menu_page
 
-        layout.addWidget(self.combo_x)
-        layout.addWidget(self.combo_y)
-        layout.addWidget(self.btn_generate_plot)
-        layout.addWidget(self.canvas)
+        self.btn_plot_line = QPushButton("Wykres liniowy\n(zależność parametrów)")
+        self.btn_plot_bar = QPushButton("Wykres słupkowy\n(porównanie gatunków)")
+        self.btn_plot_box = QPushButton("Wykres pudełkowy\n(rozkład parametrów)")
 
-        self.btn_generate_plot.clicked.connect(self.generate_plot)
+        for btn in [self.btn_plot_line, self.btn_plot_bar, self.btn_plot_box]:
+            btn.setMinimumHeight(80)
+            menu_layout.addWidget(btn)
+
+        menu_layout.addStretch()
+
+        # ===== STRONA LINIOWA =====
+        self.line_page = self.generate_line_plot_page()
+
+        # ===== STRONA SŁUPKOWA =====
+        self.bar_page = self.generate_bar_plot_page()
+
+        # ===== STRONA PUDEŁKOWA =====
+        self.box_page = self.generate_box_plot_page()
+
+        # ===== DODANIE DO STACK =====
+        self.plot_stack.addWidget(menu_page)
+        self.plot_stack.addWidget(self.line_page)
+        self.plot_stack.addWidget(self.bar_page)
+        self.plot_stack.addWidget(self.box_page)
+
+        layout.addWidget(self.plot_stack)
+
+        # ===== POŁĄCZENIA =====
+        self.btn_plot_line.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.line_page))
+        self.btn_plot_bar.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.bar_page))
+        self.btn_plot_box.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.box_page))
 
         return page
 
@@ -595,26 +733,16 @@ class DataApp(QWidget):
             else:
                 return
 
-            self.original_df = df
-            self.original_df["Gatunek"] = (
-                self.original_df["Gatunek"]
-                .astype(str)
-                .str.strip()
-            )
-            self.filtered_df = df.copy()
+            df["Gatunek"] = df["Gatunek"].astype(str).str.strip()
 
-            self.original_df = self.calculate_status(self.original_df)
-            self.filtered_df = self.calculate_status(self.filtered_df)
+            self.original_df = self.calculate_status(df)
+            self.filtered_df = self.original_df.copy()
+            self.filtered_df = self.original_df.copy()
             self.preview_model = PandasModel(self.original_df, self.ranges)
             self.filter_model = PandasModel(self.filtered_df, self.ranges)
 
             self.preview_view.setModel(self.preview_model)
             self.filter_view.setModel(self.filter_model)
-
-            self.combo_x.clear()
-            self.combo_y.clear()
-            self.combo_x.addItems(df.columns)
-            self.combo_y.addItems(df.columns)
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
@@ -717,21 +845,124 @@ class DataApp(QWidget):
     def show_stats(self):
         self.stack.setCurrentWidget(self.stats_page)
 
-    def generate_plot(self):
-        if self.filtered_df is None:
-            return
+    def generate_line_plot_page(self):
 
-        x_col = self.combo_x.currentText()
-        y_col = self.combo_y.currentText()
+        page = QWidget()
+        layout = QVBoxLayout(page)
 
-        df = self.filtered_df
+        controls = QHBoxLayout()
+        self.btn_line_back = QPushButton("← Powrót")
+        layout.addWidget(self.btn_line_back)
+        self.line_species = QComboBox()
+        self.line_species.addItems(["Pies", "Kot", "Koń"])
 
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.scatter(df[x_col], df[y_col])
-        ax.set_xlabel(x_col)
-        ax.set_ylabel(y_col)
-        self.canvas.draw()
+        self.line_x_param = QComboBox()
+        self.line_x_param.addItems(self.param_names)
+
+        self.line_y_params = MultiSelectComboBox()
+        self.line_y_params.addItems(self.param_names)
+
+        self.line_status = QComboBox()
+        self.line_status.addItems(self.status_list)
+
+        self.btn_line_generate = QPushButton("Generuj wykres")
+
+        controls.addWidget(QLabel("Gatunek"))
+        controls.addWidget(self.line_species)
+
+        controls.addWidget(QLabel("Parametr X"))
+        controls.addWidget(self.line_x_param)
+
+        controls.addWidget(QLabel("Parametry Y"))
+        controls.addWidget(self.line_y_params)
+
+        controls.addWidget(QLabel("Status"))
+        controls.addWidget(self.line_status)
+
+        controls.addWidget(self.btn_line_generate)
+
+        layout.addLayout(controls)
+
+        self.line_x_param.currentTextChanged.connect(self.update_line_y_params)
+
+        self.line_figure = Figure()
+        self.line_canvas = FigureCanvas(self.line_figure)
+
+        layout.addWidget(self.line_canvas)
+
+        self.btn_line_generate.clicked.connect(self.generate_line_plot)
+        self.btn_line_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        return page
+
+    def generate_bar_plot_page(self):
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.btn_bar_back = QPushButton("← Powrót")
+        layout.addWidget(self.btn_bar_back)
+        controls = QHBoxLayout()
+
+        self.bar_param = QComboBox()
+        self.bar_param.addItems(self.param_names)
+
+        self.bar_status = QComboBox()
+        self.bar_status.addItems(self.status_list)
+
+        self.btn_bar_generate = QPushButton("Generuj wykres")
+
+        controls.addWidget(QLabel("Parametr"))
+        controls.addWidget(self.bar_param)
+
+        controls.addWidget(QLabel("Status"))
+        controls.addWidget(self.bar_status)
+
+        controls.addWidget(self.btn_bar_generate)
+
+        layout.addLayout(controls)
+
+        self.bar_figure = Figure()
+        self.bar_canvas = FigureCanvas(self.bar_figure)
+
+        layout.addWidget(self.bar_canvas)
+
+        self.btn_bar_generate.clicked.connect(self.generate_bar_plot)
+        self.btn_bar_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        return page
+
+    def generate_box_plot_page(self):
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        controls = QHBoxLayout()
+        self.btn_box_back = QPushButton("← Powrót")
+        layout.addWidget(self.btn_box_back)
+        self.box_param = QComboBox()
+        self.box_param.addItems(self.param_names)
+
+        self.box_status = QComboBox()
+        self.box_status.addItems(self.status_list)
+
+        self.btn_box_generate = QPushButton("Generuj wykres")
+
+        controls.addWidget(QLabel("Parametr"))
+        controls.addWidget(self.box_param)
+
+        controls.addWidget(QLabel("Status"))
+        controls.addWidget(self.box_status)
+
+        controls.addWidget(self.btn_box_generate)
+
+        layout.addLayout(controls)
+
+        self.box_figure = Figure()
+        self.box_canvas = FigureCanvas(self.box_figure)
+
+        layout.addWidget(self.box_canvas)
+
+        self.btn_box_generate.clicked.connect(self.generate_box_plot)
+        self.btn_box_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        return page
 
 
 # =========================
