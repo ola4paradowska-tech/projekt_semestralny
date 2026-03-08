@@ -252,6 +252,37 @@ class DataApp(QWidget):
 
         return df_with_status
 
+    def calculate_abnormal_percent(self, df, params):
+
+        results = []
+
+        for species, group in df.groupby("Gatunek"):
+
+            for param in params:
+
+                if param not in self.ranges.get(species, {}):
+                    continue
+
+                min_val, max_val = self.ranges[species][param]
+
+                values = pd.to_numeric(group[param], errors="coerce").dropna()
+
+                if len(values) == 0:
+                    continue
+
+                above = (values > max_val).sum()
+                below = (values < min_val).sum()
+                total = len(values)
+
+                results.append({
+                    "Gatunek": species,
+                    "Parametr": param.split("[")[0].strip(),
+                    "% powyżej normy": round(100 * above / total, 2),
+                    "% poniżej normy": round(100 * below / total, 2)
+                })
+
+        return pd.DataFrame(results)
+
     def init_ui(self):
         main_layout = QHBoxLayout(self)
 
@@ -332,7 +363,7 @@ class DataApp(QWidget):
             df[p] = pd.to_numeric(df[p], errors="coerce")
 
         result = df.groupby("Gatunek")[params].agg(stats)
-
+        abnormal = self.calculate_abnormal_percent(df, params)
         result = result.stack(level=0).reset_index()
 
         result = result.rename(columns={
@@ -349,6 +380,11 @@ class DataApp(QWidget):
 
         result = result.rename(columns=stat_labels)
         result = result.sort_values(["Parametr", "Gatunek"]).reset_index(drop=True)
+        result = result.merge(
+            abnormal,
+            on=["Gatunek", "Parametr"],
+            how="left"
+        )
 
         self.stats_view.setModel(PandasModel(result))
     # =========================
