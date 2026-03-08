@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QAbstractTableModel
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 # =========================
@@ -320,6 +321,8 @@ class DataApp(QWidget):
         self.btn_filter = QPushButton("Filtrowanie danych")
         self.btn_stats = QPushButton("Analiza statystyczna")
         self.btn_plots = QPushButton("Wykresy")
+        self.btn_export_csv = QPushButton("Eksport CSV")
+        self.btn_export_pdf = QPushButton("Eksport PDF")
 
         for btn in [
             self.btn_load,
@@ -327,6 +330,8 @@ class DataApp(QWidget):
             self.btn_filter,
             self.btn_stats,
             self.btn_plots,
+            self.btn_export_csv,
+            self.btn_export_pdf
         ]:
             btn.setFixedHeight(40)
             sidebar.addWidget(btn)
@@ -355,6 +360,8 @@ class DataApp(QWidget):
         self.btn_filter.clicked.connect(lambda: self.stack.setCurrentWidget(self.filter_page))
         self.btn_stats.clicked.connect(self.show_stats)
         self.btn_plots.clicked.connect(lambda: self.stack.setCurrentWidget(self.plots_page))
+        self.btn_export_csv.clicked.connect(self.export_csv)
+        self.btn_export_pdf.clicked.connect(self.export_pdf)
 
     def calculate_stats(self):
 
@@ -599,6 +606,63 @@ class DataApp(QWidget):
             params.remove(selected_x)
 
         self.line_y_params.addItems(params)
+
+    def export_csv(self):
+
+        if self.filtered_df is None:
+            QMessageBox.warning(self, "Błąd", "Brak danych do eksportu")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz CSV",
+            "",
+            "CSV (*.csv)"
+        )
+
+        if not path:
+            return
+
+        try:
+            self.filtered_df.to_csv(path, index=False)
+            QMessageBox.information(self, "Sukces", "Dane zapisane do CSV")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", str(e))
+
+    def export_pdf(self):
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz wykres",
+            "",
+            "PDF (*.pdf)"
+        )
+
+        if not path:
+            return
+
+        try:
+
+            with PdfPages(path) as pdf:
+
+                if hasattr(self, "line_figure") and self.line_figure.axes:
+                    pdf.savefig(self.line_figure)
+
+                elif hasattr(self, "bar_figure") and self.bar_figure.axes:
+                    pdf.savefig(self.bar_figure)
+
+                elif hasattr(self, "box_figure") and self.box_figure.axes:
+                    pdf.savefig(self.box_figure)
+
+                else:
+                    QMessageBox.warning(self, "Błąd", "Brak wygenerowanego wykresu")
+                    return
+
+            QMessageBox.information(self, "Sukces", "Wykres zapisany do PDF")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", str(e))
     # =========================
     # STRONY
     # =========================
