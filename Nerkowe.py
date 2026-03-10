@@ -453,6 +453,10 @@ class DataApp(QWidget):
         if status != "Wszystkie":
             df = df[df["Status"] == status]
 
+        if len(df) < 2:
+            QMessageBox.warning(self, "Błąd", "Za mało danych do narysowania wykresu")
+            return
+
         x_param = self.param_map[x_gui]
 
         self.line_figure.clear()
