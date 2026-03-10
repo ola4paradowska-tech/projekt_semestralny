@@ -368,7 +368,7 @@ class DataApp(QWidget):
         if self.filtered_df is None:
             return
 
-        df = self.filtered_df.copy()
+        df = self.original_df.copy()
 
         species = self.stats_species.checked_items()
         status = self.stats_status.currentText()
@@ -409,7 +409,6 @@ class DataApp(QWidget):
 
         result = result.stack(level=0, future_stack=True).reset_index()
         result = result.rename(columns={"level_1": "Parametr"})
-
         result["Parametr"] = result["Parametr"].str.split("[", regex=False).str[0].str.strip()
 
         stat_labels = {
@@ -435,7 +434,7 @@ class DataApp(QWidget):
         if self.filtered_df is None:
             return
 
-        df = self.filtered_df.copy()
+        df = self.original_df.copy()
 
         species = self.line_species.currentText()
         x_gui = self.line_x_param.currentText()
@@ -521,7 +520,7 @@ class DataApp(QWidget):
         if self.filtered_df is None:
             return
 
-        df = self.filtered_df.copy()
+        df = self.original_df.copy()
 
         param_gui = self.bar_param.currentText()
         status = self.bar_status.currentText()
@@ -558,7 +557,7 @@ class DataApp(QWidget):
         if self.filtered_df is None:
             return
 
-        df = self.filtered_df.copy()
+        df = self.original_df.copy()
 
         param_gui = self.box_param.currentText()
         status = self.box_status.currentText()
