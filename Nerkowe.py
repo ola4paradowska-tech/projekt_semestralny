@@ -269,7 +269,7 @@ class DataApp(QWidget):
                 statuses.append("Zdrowy")
             elif abnormal_count == 1:
                 statuses.append("Łagodnie Chory")
-            elif 2 <= abnormal_count <= 3:
+            elif 2 <= abnormal_count <= 4:
                 statuses.append("Umiarkowanie Chory")
             else:
                 statuses.append("Ciężko Chory")
@@ -722,7 +722,6 @@ class DataApp(QWidget):
 
         self.numeric_filters = {}
 
-        # tu wpisz 9 kolumn, które chcesz filtrować
         numeric_columns = [
             "Mocznik [mg/dl]",
             "Kreatynina [mg/dl]",
