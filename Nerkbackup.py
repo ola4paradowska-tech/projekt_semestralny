@@ -392,16 +392,25 @@ class DataApp(QWidget):
         if status != "Wszystkie":
             df = df[df["Status"] == status]
 
+        if df.empty:
+            QMessageBox.warning(self, "Brak danych", "Brak danych dla wybranych filtrów")
+            return
+
         for p in params:
             df[p] = pd.to_numeric(df[p], errors="coerce")
 
         result = df.groupby("Gatunek")[params].agg(stats)
-        abnormal = self.calculate_abnormal_percent(df, params)
-        result = result.stack(level=0).reset_index()
 
+        if result.empty:
+            QMessageBox.warning(self, "Brak danych", "Nie można policzyć statystyk")
+            return
+
+        abnormal = self.calculate_abnormal_percent(df, params)
+
+        result = result.stack(level=0, future_stack=True).reset_index()
         result = result.rename(columns={"level_1": "Parametr"})
 
-        result["Parametr"] = result["Parametr"].str.split("[").str[0].str.strip()
+        result["Parametr"] = result["Parametr"].str.split("[", regex=False).str[0].str.strip()
 
         stat_labels = {
             "mean": "średnia",
@@ -411,11 +420,13 @@ class DataApp(QWidget):
 
         result = result.rename(columns=stat_labels)
         result = result.sort_values(["Parametr", "Gatunek"]).reset_index(drop=True)
-        result = result.merge(
-            abnormal,
-            on=["Gatunek", "Parametr"],
-            how="left"
-        )
+
+        if not abnormal.empty:
+            result = result.merge(
+                abnormal,
+                on=["Gatunek", "Parametr"],
+                how="left"
+            )
 
         self.stats_view.setModel(PandasModel(result))
 
@@ -879,7 +890,6 @@ class DataApp(QWidget):
             df["Gatunek"] = df["Gatunek"].astype(str).str.strip()
 
             self.original_df = self.calculate_status(df)
-            self.filtered_df = self.original_df.copy()
             self.filtered_df = self.original_df.copy()
             self.preview_model = PandasModel(self.original_df, self.ranges)
             self.filter_model = PandasModel(self.filtered_df, self.ranges)
