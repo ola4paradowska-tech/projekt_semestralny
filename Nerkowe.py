@@ -98,7 +98,9 @@ class PandasModel(QAbstractTableModel):
                 ).sort_values("_sort_col", ascending=ascending) \
                     .drop(columns="_sort_col")
 
-        except:
+
+        except Exception as e:
+            print("Sort error:", e)
             sorted_df = self._df.sort_values(col, ascending=ascending)
 
         self._df = sorted_df.reset_index(drop=True)
@@ -153,6 +155,7 @@ class DataApp(QWidget):
         self.original_df = None
         self.filtered_df = None
         self.ranges = {}
+        self.saved_plots = []
 
         # STAŁE LISTY
         self.param_names = [
@@ -644,11 +647,65 @@ class DataApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
 
+    def get_active_filters_description(self):
+
+        if self.original_df is None:
+            return "brak filtrów"
+
+        parts = []
+
+        species = self.species_combo.currentText()
+        if species != "Wszystkie":
+            parts.append(f"Gatunek: {species}")
+
+        status = self.status_combo.currentText()
+        if status != "Wszystkie":
+            parts.append(f"Status: {status}")
+
+        for col, widget in self.numeric_filters.items():
+            txt = widget.text().strip()
+            if txt:
+                parts.append(f"{col}: {txt}")
+
+        if not parts:
+            return "brak filtrów"
+
+        return ", ".join(parts)
+
+    def save_current_figure(self, fig, plot_type, species, status, params):
+
+        if fig is None or not fig.axes:
+            QMessageBox.warning(self, "Błąd", "Brak wykresu")
+            return
+
+        filters = self.get_active_filters_description()
+
+        plot_info = {
+            "figure": fig,
+            "type": plot_type,
+            "species": species,
+            "status": status,
+            "params": params,
+            "filters": filters
+        }
+
+        self.saved_plots.append(plot_info)
+
+        QMessageBox.information(
+            self,
+            "Zapisano",
+            f"Zapisano wykres ({len(self.saved_plots)})"
+        )
+
     def export_pdf(self):
+
+        if not self.saved_plots:
+            QMessageBox.warning(self, "Błąd", "Brak zapisanych wykresów")
+            return
 
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Zapisz wykres",
+            "Zapisz PDF",
             "",
             "PDF (*.pdf)"
         )
@@ -660,23 +717,31 @@ class DataApp(QWidget):
 
             with PdfPages(path) as pdf:
 
-                if hasattr(self, "line_figure") and self.line_figure.axes:
-                    pdf.savefig(self.line_figure)
+                for plot in self.saved_plots:
+                    fig = plot["figure"]
 
-                elif hasattr(self, "bar_figure") and self.bar_figure.axes:
-                    pdf.savefig(self.bar_figure)
+                    fig.suptitle(
+                        f"{plot['type']} | "
+                        f"Gatunek: {plot['species']} | "
+                        f"Status: {plot['status']} | "
+                        f"Parametry: {', '.join(plot['params'])}\n"
+                        f"Filtry: {plot['filters']}",
+                        fontsize=10
+                    )
 
-                elif hasattr(self, "box_figure") and self.box_figure.axes:
-                    pdf.savefig(self.box_figure)
+                    pdf.savefig(fig)
 
-                else:
-                    QMessageBox.warning(self, "Błąd", "Brak wygenerowanego wykresu")
-                    return
+            QMessageBox.information(
+                self,
+                "Sukces",
+                f"Zapisano {len(self.saved_plots)} wykresów"
+            )
 
-            QMessageBox.information(self, "Sukces", "Wykres zapisany do PDF")
+            self.saved_plots.clear()
 
         except Exception as e:
             QMessageBox.critical(self, "Błąd", str(e))
+
     # =========================
     # STRONY
     # =========================
@@ -1023,6 +1088,8 @@ class DataApp(QWidget):
         self.line_status.addItems(self.status_list)
 
         self.btn_line_generate = QPushButton("Generuj wykres")
+        self.btn_line_save = QPushButton("Zapisz wykres")
+        controls.addWidget(self.btn_line_save)
 
         self.line_remove_outliers = QCheckBox("Usuń wartości odstające")
         controls.addWidget(self.line_remove_outliers)
@@ -1052,6 +1119,16 @@ class DataApp(QWidget):
 
         self.btn_line_generate.clicked.connect(self.generate_line_plot)
         self.btn_line_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        self.btn_line_save.clicked.connect(
+            lambda: self.save_current_figure(
+                self.line_figure,
+                "line",
+                self.line_species.currentText(),
+                self.line_status.currentText(),
+                self.line_y_params.checked_items()
+            )
+        )
+
         return page
 
     def generate_bar_plot_page(self):
@@ -1087,6 +1164,18 @@ class DataApp(QWidget):
 
         self.btn_bar_generate.clicked.connect(self.generate_bar_plot)
         self.btn_bar_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        self.btn_bar_save = QPushButton("Zapisz wykres")
+        controls.addWidget(self.btn_bar_save)
+
+        self.btn_bar_save.clicked.connect(
+            lambda: self.save_current_figure(
+                self.bar_figure,
+                "bar",
+                "Wszystkie",
+                self.bar_status.currentText(),
+                [self.bar_param.currentText()]
+            )
+        )
         return page
 
     def generate_box_plot_page(self):
@@ -1122,6 +1211,19 @@ class DataApp(QWidget):
 
         self.btn_box_generate.clicked.connect(self.generate_box_plot)
         self.btn_box_back.clicked.connect(lambda: self.plot_stack.setCurrentIndex(0))
+        self.btn_box_save = QPushButton("Zapisz wykres")
+        controls.addWidget(self.btn_box_save)
+
+        self.btn_box_save.clicked.connect(
+            lambda: self.save_current_figure(
+                self.box_figure,
+                "box",
+                "Wszystkie",
+                self.box_status.currentText(),
+                [self.box_param.currentText()]
+            )
+        )
+
         return page
 
 
