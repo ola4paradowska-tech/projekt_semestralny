@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -53,7 +53,6 @@ class PandasModel(QAbstractTableModel):
             else:
                 display_value = str(value)
 
-            # sprawdzamy tylko jeśli mamy kolumnę Gatunek
             if "Gatunek" in self._df.columns:
                 species = str(self._df.iloc[index.row()]["Gatunek"]).strip()
                 column_name = self._df.columns[index.column()]
@@ -157,7 +156,6 @@ class DataApp(QWidget):
         self.ranges = {}
         self.saved_plots = []
 
-        # STAŁE LISTY
         self.param_names = [
             "Mocznik", "Kreatynina", "Fosfor", "Sód", "Potas",
             "Wapń", "Albuminy", "Białko całkowite", "Stosunek Na/K"
@@ -189,7 +187,7 @@ class DataApp(QWidget):
         ]
 
         self.param_colors = {
-            "Mocznik": "#E8D52E",  # żółty (gold)
+            "Mocznik": "#E8D52E",  # żółty
             "Kreatynina": "#B32222",  # czerwony
             "Fosfor": "#4E8BCF",  # niebieski
             "Sód": "#E3983B",  # pomarańczowy
@@ -214,7 +212,6 @@ class DataApp(QWidget):
 
         self.ranges = {}
 
-        # grupujemy po gatunku
         for species in ranges_df["Gatunek"].unique():
 
             species_rows = ranges_df[ranges_df["Gatunek"] == species]
@@ -267,7 +264,6 @@ class DataApp(QWidget):
                 if value < min_val or value > max_val:
                     abnormal_count += 1
 
-            # klasyfikacja
             if abnormal_count == 0:
                 statuses.append("Zdrowy")
             elif abnormal_count == 1:
@@ -482,12 +478,10 @@ class DataApp(QWidget):
             x_valid = data["x"]
             y_valid = data["y"]
 
-            # punkty pomiarowe
             color = self.param_colors.get(param_gui, "black")
 
             ax.scatter(x_valid, y_valid, color=color, label=param_gui)
 
-            # linia regresji
             coef = np.polyfit(x_valid, y_valid, 1)
             poly = np.poly1d(coef)
 
@@ -760,7 +754,6 @@ class DataApp(QWidget):
         page = QWidget()
         main_layout = QVBoxLayout(page)
 
-        # ===== GATUNEK + PODPOWIEDŹ W JEDNEJ LINII =====
         species_layout = QHBoxLayout()
 
         label = QLabel("Gatunek:")
@@ -785,7 +778,6 @@ class DataApp(QWidget):
 
         main_layout.addLayout(species_layout)
 
-        # ===== SIATKA 3x3 =====
         grid = QGridLayout()
 
         self.numeric_filters = {}
@@ -820,14 +812,12 @@ class DataApp(QWidget):
 
         main_layout.addLayout(grid)
 
-        # ===== PRZYCISKI =====
         self.apply_button = QPushButton("Zastosuj filtry")
         self.clear_button = QPushButton("Wyczyść filtry")
 
         main_layout.addWidget(self.apply_button)
         main_layout.addWidget(self.clear_button)
 
-        # ===== TABELA =====
         self.filter_view = QTableView()
         self.filter_view.setSortingEnabled(True)
         main_layout.addWidget(self.filter_view)
@@ -890,7 +880,6 @@ class DataApp(QWidget):
 
         self.plot_stack = QStackedWidget()
 
-        # ===== MENU WYBORU WYKRESU =====
         menu_page = QWidget()
         menu_layout = QVBoxLayout(menu_page)
         self.plot_menu_page = menu_page
@@ -905,16 +894,12 @@ class DataApp(QWidget):
 
         menu_layout.addStretch()
 
-        # ===== STRONA LINIOWA =====
         self.line_page = self.generate_line_plot_page()
 
-        # ===== STRONA SŁUPKOWA =====
         self.bar_page = self.generate_bar_plot_page()
 
-        # ===== STRONA PUDEŁKOWA =====
         self.box_page = self.generate_box_plot_page()
 
-        # ===== DODANIE DO STACK =====
         self.plot_stack.addWidget(menu_page)
         self.plot_stack.addWidget(self.line_page)
         self.plot_stack.addWidget(self.bar_page)
@@ -922,7 +907,6 @@ class DataApp(QWidget):
 
         layout.addWidget(self.plot_stack)
 
-        # ===== POŁĄCZENIA =====
         self.btn_plot_line.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.line_page))
         self.btn_plot_bar.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.bar_page))
         self.btn_plot_box.clicked.connect(lambda: self.plot_stack.setCurrentWidget(self.box_page))
@@ -973,21 +957,17 @@ class DataApp(QWidget):
 
         df = self.original_df.drop(columns=["Status"], errors="ignore").copy()
 
-        # Gatunek
         species = self.species_combo.currentText()
         if species != "Wszystkie":
             df = df[df["Gatunek"] == species]
 
-        # Filtry liczbowe
         for column, widget in self.numeric_filters.items():
             condition = widget.text().strip()
             if condition:
                 df = self.apply_numeric_filter(df, column, condition)
 
-        # Liczymy status
         df = self.calculate_status(df)
 
-        # Filtrujemy po nowym statusie (4 poziomy)
         status = self.status_combo.currentText()
         if status != "Wszystkie":
             df = df[df["Status"] == status]
@@ -1003,7 +983,6 @@ class DataApp(QWidget):
 
         for part in parts:
 
-            # zakres
             if "-" in part and not part.startswith("-"):
                 try:
                     min_val, max_val = part.split("-")
