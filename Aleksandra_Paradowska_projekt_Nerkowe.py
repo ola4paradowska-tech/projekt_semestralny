@@ -933,7 +933,6 @@ class DataApp(QWidget):
                 df = pd.read_excel(file_path, engine="openpyxl", header=1)
 
             elif file_path.endswith(".csv"):
-                df = pd.read_csv(file_path, sep=';', decimal=',', encoding='utf-8')
 
             else:
                 return
